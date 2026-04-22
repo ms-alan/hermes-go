@@ -45,18 +45,28 @@ func NewStdioTransport(params StdioServerParameters) (*StdioTransport, error) {
 
 	cmd := exec.Command(params.Command, params.Args...)
 	cmd.Env = env
-	cmd.Stdin = os.Stdin
-	cmd.Stdout = os.Stdout
+	// Create pipes so we can read/write the subprocess stdio from Send().
+	stdin, err := cmd.StdinPipe()
+	if err != nil {
+		return nil, fmt.Errorf("stdin pipe: %w", err)
+	}
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		stdin.Close()
+		return nil, fmt.Errorf("stdout pipe: %w", err)
+	}
 	cmd.Stderr = os.Stderr
 
 	if err := cmd.Start(); err != nil {
+		stdin.Close()
+		stdout.Close()
 		return nil, fmt.Errorf("start stdio server: %w", err)
 	}
 
 	return &StdioTransport{
 		cmd:    cmd,
-		stdin:  os.Stdin,
-		stdout: os.Stdout,
+		stdin:  stdin,
+		stdout: stdout,
 	}, nil
 }
 
