@@ -121,7 +121,9 @@ func (m *Manager) GetMessages() []*model.Message {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	result := make([]*model.Message, len(m.messages))
-	copy(result, m.messages)
+	for i, msg := range m.messages {
+		result[i] = msg.Clone()
+	}
 	return result
 }
 

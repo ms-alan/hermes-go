@@ -216,16 +216,23 @@ func (r *EventStreamReader) ReadLine() (string, error) {
 	for {
 		n, err := r.reader.Read(buf)
 		if err != nil {
-			return string(line), err
+			if len(line) == 0 {
+				return "", err
+			}
+			return string(line), nil
 		}
 		if n > 0 && buf[0] == '\n' {
-			break
+			// SSE uses \n\n as message separator; skip the second \n
+			if len(line) == 0 {
+				// Empty line (between SSE messages) — keep reading
+				continue
+			}
+			return string(line), nil
 		}
 		if buf[0] != '\r' {
 			line = append(line, buf[0])
 		}
 	}
-	return string(line), nil
 }
 
 // Ensure OpenAIClient implements LLMClient at compile time.

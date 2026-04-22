@@ -66,6 +66,48 @@ func (tc *ToolCall) ParseArguments(args interface{}) error {
 	return json.Unmarshal(tc.Function.Arguments, args)
 }
 
+// Clone returns a deep copy of the ToolCall.
+func (tc *ToolCall) Clone() *ToolCall {
+	if tc == nil {
+		return nil
+	}
+	var argsCopy json.RawMessage
+	if tc.Function != nil {
+		argsCopy = make(json.RawMessage, len(tc.Function.Arguments))
+		copy(argsCopy, tc.Function.Arguments)
+	}
+	return &ToolCall{
+		ID:       tc.ID,
+		Type:     tc.Type,
+		Function: &FunctionCall{
+			Name:      tc.Function.Name,
+			Arguments: argsCopy,
+		},
+	}
+}
+
+// Clone returns a deep copy of the Message.
+func (m *Message) Clone() *Message {
+	if m == nil {
+		return nil
+	}
+	cloned := &Message{
+		Role:       m.Role,
+		Content:    m.Content,
+		Name:       m.Name,
+		ToolCallID: m.ToolCallID,
+		ToolPlan:   m.ToolPlan,
+		StopReason: m.StopReason,
+	}
+	if m.ToolCalls != nil {
+		cloned.ToolCalls = make([]*ToolCall, len(m.ToolCalls))
+		for i, tc := range m.ToolCalls {
+			cloned.ToolCalls[i] = tc.Clone()
+		}
+	}
+	return cloned
+}
+
 // GetArguments returns the raw arguments as a JSON string.
 func (tc *ToolCall) GetArguments() string {
 	return string(tc.Function.Arguments)

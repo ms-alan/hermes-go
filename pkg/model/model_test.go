@@ -498,17 +498,12 @@ func TestOpenAIClientImplementsLLMClient(t *testing.T) {
 // ---- EventStreamReader ----
 
 func TestEventStreamReader(t *testing.T) {
-	handler := func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte("data: first chunk\n\ndata: second chunk\n\ndata: [DONE]\n\n"))
-	}
-	server := newTestServer(t, handler)
-	t.Cleanup(server.Close)
+	rec := httptest.NewRecorder()
 
-	req := httptest.NewRequest(http.MethodGet, "/", nil)
-	resp := httptest.NewRecorder()
-	handler(resp, req)
+	// SSE uses \r\n\r\n as message separator
+	rec.Write([]byte("data: first chunk\r\n\r\ndata: second chunk\r\n\r\ndata: [DONE]\r\n\r\n"))
 
-	reader := NewEventStreamReader(resp.Body)
+	reader := NewEventStreamReader(rec.Body)
 	line1, err := reader.ReadLine()
 	if err != nil {
 		t.Fatalf("ReadLine 1: %v", err)
@@ -525,9 +520,15 @@ func TestEventStreamReader(t *testing.T) {
 		t.Errorf("line2 = %q, want %q", line2, "data: second chunk")
 	}
 
+	// 3rd line
+	line3, err := reader.ReadLine()
+	if line3 != "data: [DONE]" {
+		t.Errorf("line3 = %q, want %q", line3, "data: [DONE]")
+	}
+	// 4th call should return EOF
 	_, err = reader.ReadLine()
 	if err != io.EOF {
-		t.Errorf("ReadLine EOF: got %v, want %v", err, io.EOF)
+		t.Errorf("ReadLine 4: got err=%v, want EOF", err)
 	}
 }
 
