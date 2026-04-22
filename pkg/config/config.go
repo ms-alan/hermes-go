@@ -414,7 +414,16 @@ func resolveSecretString(s string, secrets map[string]string) string {
 		}
 
 		// Try environment variable as fallback
-		return os.Getenv(path)
+		if val := os.Getenv(path); val != "" {
+			return val
+		}
+
+		// If path contains a fallback value (${SECRET:key:fallback}), return it
+		if len(parts) == 2 {
+			return parts[1]
+		}
+
+		return ""
 	})
 }
 
@@ -618,6 +627,9 @@ func (c *Config) GetMCPServers() map[string]*MCPConfig {
 
 // GetSkills returns skills configuration
 func (c *Config) GetSkills() []SkillConfig {
+	if c.Skills == nil {
+		return []SkillConfig{}
+	}
 	return c.Skills
 }
 

@@ -539,7 +539,17 @@ func (s *Store) SetSessionTitle(sessionID string, title *string) (bool, error) {
 				return err
 			}
 		}
-		res, err := tx.Exec(`UPDATE sessions SET title = ? WHERE id = ?`, ptrToStr(title), sessionID)
+		var res sql.Result
+		var err error
+		if title == nil {
+			res, err = tx.Exec(`UPDATE sessions SET title = NULL WHERE id = ?`, sessionID)
+		} else {
+			_, err = tx.Exec(`SELECT id FROM sessions WHERE title = ? AND id != ?`, *title, sessionID)
+			if err != nil && err != sql.ErrNoRows {
+				return err
+			}
+			res, err = tx.Exec(`UPDATE sessions SET title = ? WHERE id = ?`, *title, sessionID)
+		}
 		if err != nil {
 			return err
 		}

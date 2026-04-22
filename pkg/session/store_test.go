@@ -826,7 +826,7 @@ func TestSessionHelpers(t *testing.T) {
 	time.Sleep(10 * time.Millisecond)
 
 	sess, _ := store.GetSession("h1")
-	if !sess.IsEnded() {
+	if sess.IsEnded() {
 		t.Error("new session should not be ended")
 	}
 	if sess.StartedTime().IsZero() {
