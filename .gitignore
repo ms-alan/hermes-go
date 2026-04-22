@@ -1,0 +1,20 @@
+# Binaries
+hermes
+hermes-gateway
+*.exe
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# SQLite
+*.db
+*.db-journal
+
+# Logs
+*.log
+
+# Temp
+.DS_Store
+config/
