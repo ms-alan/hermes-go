@@ -17,6 +17,7 @@ package tools
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"sync"
 )
 
@@ -102,8 +103,9 @@ func (r *ToolRegistry) Register(
 		// Allow MCP-to-MCP overwrites; reject built-in shadowing.
 		bothMCP := isMCP(toolset) && isMCP(existing.Toolset)
 		if !bothMCP {
-			panic(fmt.Sprintf("tool registration REJECTED: %q (toolset %q) would shadow existing tool from toolset %q",
-				name, toolset, existing.Toolset))
+			log.Printf("WARN: tool registration REJECTED: %q (toolset %q) would shadow existing tool from toolset %q — skipping",
+				name, toolset, existing.Toolset)
+			return
 		}
 	}
 
