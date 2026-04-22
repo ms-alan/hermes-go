@@ -28,7 +28,7 @@ func main() {
 	defer cancel()
 
 	platformsFlag := flag.String("platforms", "qq", "comma-separated platforms (qq,telegram,discord)")
-	flag.String("session", "", "session ID to resume") // TODO: implement
+	sessionIDFlag := flag.String("session", "", "session ID to resume")
 	skillsDir := flag.String("skills-dir", "", "skills directory (default ~/.hermes/skills)")
 	gatewayAddr := flag.String("gateway", "", "HTTP API address (host:port)")
 	flag.Parse()
@@ -115,6 +115,18 @@ func main() {
 
 	// Session agent
 	sessAgent := agent.NewSessionAgent(aiAgent, store, ctxMgr, logger)
+
+	// Resume existing session if -session flag provided
+	if *sessionIDFlag != "" {
+		if err := sessAgent.Switch(*sessionIDFlag); err != nil {
+			logger.Warn("failed to resume session, starting new session", "session_id", *sessionIDFlag, "error", err)
+			if _, err := sessAgent.New("gateway", modelName, ""); err != nil {
+				logger.Error("failed to create session", "error", err)
+			}
+		} else {
+			logger.Info("resumed session", "session_id", *sessionIDFlag)
+		}
+	}
 
 	// Platform adapters
 	var adapters []gateway.PlatformAdapter
