@@ -251,3 +251,19 @@ func (a *AIAgent) Chat(ctx context.Context, message string) (string, error) {
 	}
 	return result.FinalResponse, nil
 }
+
+// SyncToolsToConfig populates Config.Tools from the registered tool defs.
+// Call this after registering tools and before the first LLM request.
+func (a *AIAgent) SyncToolsToConfig() {
+	a.config.Tools = nil
+	for _, def := range a.toolDefs {
+		a.config.Tools = append(a.config.Tools, &model.Tool{
+			Type: "function",
+			Function: &model.FunctionDef{
+				Name:        def.Name,
+				Description: def.Description,
+				Parameters:  def.InputSchema,
+			},
+		})
+	}
+}

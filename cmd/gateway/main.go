@@ -7,11 +7,13 @@ import (
 	"log/slog"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"strings"
 	"syscall"
 
 	"github.com/nousresearch/hermes-go/pkg/agent"
 	agentcontext "github.com/nousresearch/hermes-go/pkg/context"
+	"github.com/nousresearch/hermes-go/pkg/config"
 	"github.com/nousresearch/hermes-go/pkg/gateway"
 	"github.com/nousresearch/hermes-go/pkg/gateway/qqbot"
 	"github.com/nousresearch/hermes-go/pkg/model"
@@ -45,6 +47,16 @@ func main() {
 		}
 	}
 
+	// Load configuration from ~/.hermes/config.yaml.
+	home, _ := os.UserHomeDir()
+	cfgPath := filepath.Join(home, ".hermes", "config.yaml")
+	loader := config.NewLoader(config.WithConfigFiles(cfgPath))
+	cfg, err := loader.Load()
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "config load error:", err)
+		os.Exit(1)
+	}
+
 	// Session store
 	store, err := session.NewStore()
 	if err != nil {
@@ -53,15 +65,23 @@ func main() {
 	}
 	defer store.Close()
 
-	// Model client
-	apiKey := os.Getenv("OPENAI_API_KEY")
-	baseURL := os.Getenv("OPENAI_BASE_URL")
+	// Model client — build from config (env vars override)
+	baseURL := cfg.Model.APIBase
 	if baseURL == "" {
 		baseURL = "https://api.openai.com/v1"
+	}
+	apiKey := cfg.Model.APIKey
+	if apiKey == "" {
+		apiKey = os.Getenv("OPENAI_API_KEY")
+	}
+	modelName := cfg.Model.ModelName
+	if modelName == "" {
+		modelName = "gpt-4o"
 	}
 	modelClient, err := model.NewOpenAIClient(
 		model.WithAPIKey(apiKey),
 		model.WithBaseURL(baseURL),
+		model.WithModel(modelName),
 	)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "model client error:", err)

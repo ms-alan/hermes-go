@@ -7,7 +7,7 @@ import (
 	"log/slog"
 	"os"
 
-	"github.com/nousresearch/hermes-go/config"
+	"github.com/nousresearch/hermes-go/pkg/config"
 	"github.com/nousresearch/hermes-go/pkg/agent"
 	"github.com/nousresearch/hermes-go/pkg/model"
 	"github.com/nousresearch/hermes-go/pkg/session"
@@ -31,15 +31,21 @@ func main() {
 	// Determine effective values: CLI flags override config defaults.
 	model := *modelFlag
 	if model == "" {
-		model = cfg.DefaultModel
+		model = cfg.Model.ModelName
+		if model == "" {
+			model = "gpt-4o"
+		}
 	}
 	baseURL := *baseURLFlag
 	if baseURL == "" {
-		baseURL = cfg.DefaultBaseURL
+		baseURL = cfg.Model.APIBase
+		if baseURL == "" {
+			baseURL = "https://api.openai.com/v1"
+		}
 	}
 	apiKey := *apiKeyFlag
 	if apiKey == "" {
-		apiKey = cfg.GetAPIKey("openai") // fallback to openai key
+		apiKey = cfg.Model.APIKey
 	}
 	sessionID := *sessionIDFlag
 
@@ -50,13 +56,11 @@ func main() {
 
 	// Build agent config.
 	agentConfig := agent.Config{
-		Model:          model,
-		APIKey:         apiKey,
-		BaseURL:        baseURL,
-		ExtraHeaders:   cfg.ExtraHeaders,
-		TimeoutSeconds: cfg.TimeoutSeconds,
-		MaxIterations:  cfg.MaxIterations,
-		Logger:         &slogLogger{log: logger},
+		Model:         model,
+		APIKey:        apiKey,
+		BaseURL:       baseURL,
+		MaxIterations: 90,
+		Logger:        &slogLogger{log: logger},
 	}
 
 	// Open session store.
@@ -107,27 +111,13 @@ func (s *slogLogger) Warn(msg string, args ...any)  { s.log.Warn(msg, args...) }
 func (s *slogLogger) Error(msg string, args ...any) { s.log.Error(msg, args...) }
 
 // newLLMClient creates an LLM client based on the base URL.
-// This is a placeholder that returns an error if actually used.
-// Real implementation would construct the appropriate client (OpenAI, Anthropic, etc.).
 func newLLMClient(baseURL, apiKey string, logger *slog.Logger) (model.LLMClient, error) {
-	// TODO: implement real LLM client based on baseURL
-	// For now, return a placeholder
-	return &noopLLMClient{logger: logger}, nil
-}
-
-// noopLLMClient is a placeholder that returns errors on chat.
-type noopLLMClient struct {
-	logger *slog.Logger
-}
-
-func (c *noopLLMClient) Chat(ctx context.Context, req *model.ChatRequest) (*model.ChatResponse, error) {
-	return nil, fmt.Errorf("no LLM client configured: set base-url to an OpenAI-compatible endpoint")
-}
-
-func (c *noopLLMClient) Stream(ctx context.Context, req *model.ChatRequest) (<-chan model.StreamChunk, error) {
-	return nil, fmt.Errorf("no LLM client configured: set base-url to an OpenAI-compatible endpoint")
-}
-
-func (c *noopLLMClient) Close() error {
-	return nil
+	if baseURL == "" {
+		return nil, fmt.Errorf("base-url is required")
+	}
+	opts := []model.Option{
+		model.WithBaseURL(baseURL),
+		model.WithAPIKey(apiKey),
+	}
+	return model.NewOpenAIClient(opts...)
 }

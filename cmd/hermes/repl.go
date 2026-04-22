@@ -12,6 +12,7 @@ import (
 	"github.com/nousresearch/hermes-go/pkg/agent"
 	"github.com/nousresearch/hermes-go/pkg/model"
 	"github.com/nousresearch/hermes-go/pkg/session"
+	"github.com/nousresearch/hermes-go/pkg/tools"
 	ctxmgr "github.com/nousresearch/hermes-go/pkg/context"
 )
 
@@ -35,6 +36,13 @@ func newREPL(agentCfg agent.Config, store *session.Store, logger *slog.Logger, m
 
 	// Create AIAgent
 	aiAgent := agent.NewAIAgent(modelClient, agentCfg)
+
+	// Register built-in tools from the tools package
+	// (populates both the handler registry and the LLM-facing tool schemas)
+	registerBuiltinTools(aiAgent)
+
+	// Sync tools into agent.Config.Tools so AIAgent sends them in LLM requests
+	aiAgent.SyncToolsToConfig()
 
 	// Create SessionAgent
 	sessionAgent := agent.NewSessionAgent(aiAgent, store, ctxMgr, logger)
@@ -171,7 +179,14 @@ func (r *repl) printHelp() {
 
 func (r *repl) printTools() {
 	fmt.Println("Available tools:")
-	fmt.Println("  (no tools registered yet)")
+	toolNames := tools.List()
+	if len(toolNames) == 0 {
+		fmt.Println("  (no tools registered)")
+		return
+	}
+	for _, name := range toolNames {
+		fmt.Printf("  - %s\n", name)
+	}
 }
 
 func (r *repl) printSessions() {
