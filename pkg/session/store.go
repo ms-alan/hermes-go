@@ -409,8 +409,9 @@ func (s *Store) UpdateSystemPrompt(sessionID, systemPrompt string) error {
 	})
 }
 
-// UpdateTokenCounts updates token counters. If absolute is false, values are
-// incremented; if true, values are set directly.
+// UpdateTokenCounts updates token and cost counters for a session.
+// If absolute=true, values replace; if false, values are added to existing.
+// model/billing fields use NULL to mean "don't update".
 func (s *Store) UpdateTokenCounts(sessionID string, inputTokens, outputTokens, cacheRead, cacheWrite, reasoningTokens int,
 	absolute bool, model *string, billingProvider, billingBaseURL, billingMode *string,
 	estimatedCostUSD, actualCostUSD *float64,
@@ -418,6 +419,7 @@ func (s *Store) UpdateTokenCounts(sessionID string, inputTokens, outputTokens, c
 ) error {
 	return s.executeWrite(func(tx *sql.Tx) error {
 		if absolute {
+			modelVal := ptrToStr(model)
 			_, err := tx.Exec(`
 				UPDATE sessions SET
 					input_tokens = ?,
@@ -425,21 +427,21 @@ func (s *Store) UpdateTokenCounts(sessionID string, inputTokens, outputTokens, c
 					cache_read_tokens = ?,
 					cache_write_tokens = ?,
 					reasoning_tokens = ?,
-					estimated_cost_usd = COALESCE(?, 0),
+					estimated_cost_usd = ?,
 					actual_cost_usd = COALESCE(?, actual_cost_usd),
-					cost_status = COALESCE(?, cost_status),
-					cost_source = COALESCE(?, cost_source),
-					pricing_version = COALESCE(?, pricing_version),
-					billing_provider = COALESCE(?, billing_provider),
-					billing_base_url = COALESCE(?, billing_base_url),
-					billing_mode = COALESCE(?, billing_mode),
-					model = COALESCE(model, ?)
+					cost_status = ?,
+					cost_source = ?,
+					pricing_version = ?,
+					billing_provider = ?,
+					billing_base_url = ?,
+					billing_mode = ?,
+					model = ?
 				WHERE id = ?`,
 				inputTokens, outputTokens, cacheRead, cacheWrite, reasoningTokens,
 				estimatedCostUSD, actualCostUSD,
 				costStatus, costSource, pricingVersion,
 				billingProvider, billingBaseURL, billingMode,
-				model, sessionID)
+				modelVal, sessionID)
 			return err
 		}
 		_, err := tx.Exec(`
@@ -456,14 +458,13 @@ func (s *Store) UpdateTokenCounts(sessionID string, inputTokens, outputTokens, c
 				pricing_version = COALESCE(?, pricing_version),
 				billing_provider = COALESCE(?, billing_provider),
 				billing_base_url = COALESCE(?, billing_base_url),
-				billing_mode = COALESCE(?, billing_mode),
-				model = COALESCE(model, ?)
+				billing_mode = COALESCE(?, billing_mode)
 			WHERE id = ?`,
 			inputTokens, outputTokens, cacheRead, cacheWrite, reasoningTokens,
 			estimatedCostUSD, actualCostUSD,
 			costStatus, costSource, pricingVersion,
 			billingProvider, billingBaseURL, billingMode,
-			model, sessionID)
+			sessionID)
 		return err
 	})
 }
@@ -763,25 +764,25 @@ func scanSession(row *sql.Row) (*Session, error) {
 	}
 
 	if userID.Valid {
-		s.UserID = &userID.String
+		s.UserID = strPtr(userID.String)
 	}
 	if model.Valid {
-		s.Model = &model.String
+		s.Model = strPtr(model.String)
 	}
 	if modelConfig.Valid {
-		s.ModelConfig = &modelConfig.String
+		s.ModelConfig = strPtr(modelConfig.String)
 	}
 	if systemPrompt.Valid {
-		s.SystemPrompt = &systemPrompt.String
+		s.SystemPrompt = strPtr(systemPrompt.String)
 	}
 	if parentSessionID.Valid {
-		s.ParentSessionID = &parentSessionID.String
+		s.ParentSessionID = strPtr(parentSessionID.String)
 	}
 	if endedAt.Valid {
-		s.EndedAt = &endedAt.Float64
+		s.EndedAt = ptr(endedAt.Float64)
 	}
 	if endReason.Valid {
-		s.EndReason = &endReason.String
+		s.EndReason = strPtr(endReason.String)
 	}
 	if cacheReadTokens.Valid {
 		s.CacheReadTokens = int(cacheReadTokens.Int64)
@@ -793,31 +794,31 @@ func scanSession(row *sql.Row) (*Session, error) {
 		s.ReasoningTokens = int(reasoningTokens.Int64)
 	}
 	if billingProvider.Valid {
-		s.BillingProvider = &billingProvider.String
+		s.BillingProvider = strPtr(billingProvider.String)
 	}
 	if billingBaseURL.Valid {
-		s.BillingBaseURL = &billingBaseURL.String
+		s.BillingBaseURL = strPtr(billingBaseURL.String)
 	}
 	if billingMode.Valid {
-		s.BillingMode = &billingMode.String
+		s.BillingMode = strPtr(billingMode.String)
 	}
 	if estimatedCostUSD.Valid {
-		s.EstimatedCostUSD = &estimatedCostUSD.Float64
+		s.EstimatedCostUSD = ptr(estimatedCostUSD.Float64)
 	}
 	if actualCostUSD.Valid {
-		s.ActualCostUSD = &actualCostUSD.Float64
+		s.ActualCostUSD = ptr(actualCostUSD.Float64)
 	}
 	if costStatus.Valid {
-		s.CostStatus = &costStatus.String
+		s.CostStatus = strPtr(costStatus.String)
 	}
 	if costSource.Valid {
-		s.CostSource = &costSource.String
+		s.CostSource = strPtr(costSource.String)
 	}
 	if pricingVersion.Valid {
-		s.PricingVersion = &pricingVersion.String
+		s.PricingVersion = strPtr(pricingVersion.String)
 	}
 	if title.Valid {
-		s.Title = &title.String
+		s.Title = strPtr(title.String)
 	}
 
 	return s, nil
@@ -845,25 +846,25 @@ func scanSessions(rows *sql.Rows) ([]*Session, error) {
 			return nil, err
 		}
 		if userID.Valid {
-			s.UserID = &userID.String
+			s.UserID = strPtr(userID.String)
 		}
 		if model.Valid {
-			s.Model = &model.String
+			s.Model = strPtr(model.String)
 		}
 		if modelConfig.Valid {
-			s.ModelConfig = &modelConfig.String
+			s.ModelConfig = strPtr(modelConfig.String)
 		}
 		if systemPrompt.Valid {
-			s.SystemPrompt = &systemPrompt.String
+			s.SystemPrompt = strPtr(systemPrompt.String)
 		}
 		if parentSessionID.Valid {
-			s.ParentSessionID = &parentSessionID.String
+			s.ParentSessionID = strPtr(parentSessionID.String)
 		}
 		if endedAt.Valid {
-			s.EndedAt = &endedAt.Float64
+			s.EndedAt = ptr(endedAt.Float64)
 		}
 		if endReason.Valid {
-			s.EndReason = &endReason.String
+			s.EndReason = strPtr(endReason.String)
 		}
 		if cacheReadTokens.Valid {
 			s.CacheReadTokens = int(cacheReadTokens.Int64)
@@ -875,31 +876,31 @@ func scanSessions(rows *sql.Rows) ([]*Session, error) {
 			s.ReasoningTokens = int(reasoningTokens.Int64)
 		}
 		if billingProvider.Valid {
-			s.BillingProvider = &billingProvider.String
+			s.BillingProvider = strPtr(billingProvider.String)
 		}
 		if billingBaseURL.Valid {
-			s.BillingBaseURL = &billingBaseURL.String
+			s.BillingBaseURL = strPtr(billingBaseURL.String)
 		}
 		if billingMode.Valid {
-			s.BillingMode = &billingMode.String
+			s.BillingMode = strPtr(billingMode.String)
 		}
 		if estimatedCostUSD.Valid {
-			s.EstimatedCostUSD = &estimatedCostUSD.Float64
+			s.EstimatedCostUSD = ptr(estimatedCostUSD.Float64)
 		}
 		if actualCostUSD.Valid {
-			s.ActualCostUSD = &actualCostUSD.Float64
+			s.ActualCostUSD = ptr(actualCostUSD.Float64)
 		}
 		if costStatus.Valid {
-			s.CostStatus = &costStatus.String
+			s.CostStatus = strPtr(costStatus.String)
 		}
 		if costSource.Valid {
-			s.CostSource = &costSource.String
+			s.CostSource = strPtr(costSource.String)
 		}
 		if pricingVersion.Valid {
-			s.PricingVersion = &pricingVersion.String
+			s.PricingVersion = strPtr(pricingVersion.String)
 		}
 		if title.Valid {
-			s.Title = &title.String
+			s.Title = strPtr(title.String)
 		}
 		sessions = append(sessions, s)
 	}

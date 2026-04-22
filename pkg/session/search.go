@@ -374,7 +374,7 @@ var (
 	// controlChars matches ASCII control characters (0x00-0x1F and 0x7F).
 	controlChars = regexp.MustCompile(`[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]`)
 	// unicodeControl matches problematic Unicode control characters.
-	unicodeControl = regexp.MustCompile(`[\u200b-\u200f\u2028-\u202e\u2060-\u2069\ufeff\ufffc\ufff9-\ufffb]`)
+	unicodeControl = regexp.MustCompile(`[\x{200b}-\x{200f}\x{2028}-\x{202e}\x{2060}-\x{2069}\x{feff}]`)
 	// whitespaceCollpase collapses runs of whitespace to a single space.
 	whitespaceCollpase = regexp.MustCompile(`\s+`)
 )

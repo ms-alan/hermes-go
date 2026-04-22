@@ -6,6 +6,7 @@ require (
 	github.com/google/uuid v1.6.0
 	gopkg.in/yaml.v3 v3.0.1
 	modernc.org/sqlite v1.36.0
+	nhooyr.io/websocket v1.8.17
 )
 
 require (
@@ -18,5 +19,4 @@ require (
 	modernc.org/libc v1.61.13 // indirect
 	modernc.org/mathutil v1.7.1 // indirect
 	modernc.org/memory v1.8.2 // indirect
-	nhooyr.io/websocket v1.8.17 // indirect
 )

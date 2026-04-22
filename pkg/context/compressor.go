@@ -80,7 +80,13 @@ func NewContextCompressor(cfg CompressorConfig, logger *slog.Logger, s Summarize
 
 // ShouldCompress returns true when the estimated token count exceeds the threshold.
 func (c *ContextCompressor) ShouldCompress(estimatedTokens int) bool {
+	if estimatedTokens == 0 {
+		return false
+	}
 	threshold := int(float64(estimatedTokens) * c.config.ThresholdPercent)
+	if threshold < 1 {
+		threshold = 1
+	}
 	if estimatedTokens < threshold {
 		return false
 	}

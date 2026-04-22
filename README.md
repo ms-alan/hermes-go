@@ -2,7 +2,7 @@
 
 基于 Go 1.24 的 AI Agent 框架，Python 版 [hermes-agent](https://github.com/NousResearch/hermes-agent) 的 Go 重写版本。
 
-> 作者 [@ms-alan](https://github.com/ms-alan) · 武汉 · AI 虚拟主播场景
+> 作者 [@ms-alan](https://github.com/ms-alan) 
 
 ## 特性
 

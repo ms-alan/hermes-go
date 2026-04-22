@@ -9,6 +9,8 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+
+	"gopkg.in/yaml.v3"
 )
 
 // Config represents the root configuration structure
@@ -347,9 +349,7 @@ func (l *Loader) resolveSecrets(cfg *Config) error {
 // resolveSecretsWalk recursively walks the config to resolve secrets
 func resolveSecretsWalk(v interface{}, secrets map[string]string) error {
 	switch val := v.(type) {
-	case *Config:
-		return resolveSecretsWalk(val, secrets)
-	case *ModelConfig, *AgentConfig, *SessionConfig, *ContextConfig, *LoggingConfig, *PlatformsConfig:
+	case *Config, *ModelConfig, *AgentConfig, *SessionConfig, *ContextConfig, *LoggingConfig, *PlatformsConfig:
 		return resolveStructSecrets(reflect.ValueOf(val).Elem(), secrets)
 	case map[string]interface{}:
 		for k, v := range val {
@@ -531,56 +531,9 @@ func applyEnvToValue(v reflect.Value, prefix string) error {
 	return nil
 }
 
-// yamlUnmarshal provides basic YAML unmarshaling using JSON as intermediate
-// This avoids external dependencies
+// yamlUnmarshal unmarshals YAML data using gopkg.in/yaml.v3
 func yamlUnmarshal(data []byte, v interface{}) error {
-	// Simple YAML to JSON conversion for basic structures
-	yamlToJSON := func(y []byte) ([]byte, error) {
-		// Handle basic YAML types
-		jsonData := string(y)
-		
-		// Convert boolean values
-		jsonData = strings.ReplaceAll(jsonData, ": true", ": true")
-		jsonData = strings.ReplaceAll(jsonData, ": false", ": false")
-		jsonData = strings.ReplaceAll(jsonData, ": yes", ": true")
-		jsonData = strings.ReplaceAll(jsonData, ": no", ": false")
-		
-		// Handle quoted strings
-		quotedPattern := regexp.MustCompile(`: *"(.*?)"`)
-		jsonData = quotedPattern.ReplaceAllString(jsonData, ": \"$1\"")
-		
-		// Handle unquoted strings (but not already quoted)
-		lines := strings.Split(jsonData, "\n")
-		for i, line := range lines {
-			if strings.TrimSpace(line) == "" || strings.HasPrefix(strings.TrimSpace(line), "#") {
-				continue
-			}
-			// Simple key: value detection
-			if strings.Contains(line, ":") && !strings.Contains(line, "\"") {
-				parts := strings.SplitN(line, ":", 2)
-				if len(parts) == 2 {
-					key := strings.TrimSpace(parts[0])
-					val := strings.TrimSpace(parts[1])
-					if val != "" && val != "null" && val != "true" && val != "false" {
-						if _, err := strconv.ParseFloat(val, 64); err != nil {
-							if val != "null" && val != "true" && val != "false" {
-								lines[i] = key + ": \"" + val + "\""
-							}
-						}
-					}
-				}
-			}
-		}
-		jsonData = strings.Join(lines, "\n")
-		
-		return []byte(jsonData), nil
-	}
-
-	jsonData, err := yamlToJSON(data)
-	if err != nil {
-		return err
-	}
-	return json.Unmarshal(jsonData, v)
+	return yaml.Unmarshal(data, v)
 }
 
 // Load is a convenience function to load config from default locations
