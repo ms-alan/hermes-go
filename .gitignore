@@ -1,6 +1,7 @@
 # Binaries
 hermes
 hermes-gateway
+gateway
 *.exe
 
 # IDE
