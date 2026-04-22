@@ -83,7 +83,8 @@ func buildEnv(extra map[string]string) []string {
 }
 
 // Send sends a JSON-RPC request over stdio and waits for a response.
-func (t *StdioTransport) Send(_ context.Context, method string, params map[string]interface{}) (json.RawMessage, error) {
+// It respects the context deadline/cancellation.
+func (t *StdioTransport) Send(ctx context.Context, method string, params map[string]interface{}) (json.RawMessage, error) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 
@@ -109,22 +110,34 @@ func (t *StdioTransport) Send(_ context.Context, method string, params map[strin
 		return nil, fmt.Errorf("write to stdin: %w", err)
 	}
 
-	reader := bufio.NewReader(t.stdout)
-	line, err := reader.ReadBytes('\n')
-	if err != nil {
+	// Wait for response with context cancellation support.
+	respCh := make(chan []byte, 1)
+	errCh := make(chan error, 1)
+	go func() {
+		reader := bufio.NewReader(t.stdout)
+		line, err := reader.ReadBytes('\n')
+		if err != nil {
+			errCh <- err
+			return
+		}
+		respCh <- line
+	}()
+
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	case err := <-errCh:
 		return nil, fmt.Errorf("read response: %w", err)
+	case line := <-respCh:
+		var resp JSONRPCResponse
+		if err := json.Unmarshal(line, &resp); err != nil {
+			return nil, fmt.Errorf("unmarshal response: %w", err)
+		}
+		if resp.Error != nil {
+			return nil, fmt.Errorf("server error %d: %s", resp.Error.Code, resp.Error.Message)
+		}
+		return resp.Result, nil
 	}
-
-	var resp JSONRPCResponse
-	if err := json.Unmarshal(line, &resp); err != nil {
-		return nil, fmt.Errorf("unmarshal response: %w", err)
-	}
-
-	if resp.Error != nil {
-		return nil, fmt.Errorf("server error %d: %s", resp.Error.Code, resp.Error.Message)
-	}
-
-	return resp.Result, nil
 }
 
 // Close terminates the subprocess.

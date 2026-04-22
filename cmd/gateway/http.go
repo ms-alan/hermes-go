@@ -9,73 +9,76 @@ import (
 	"github.com/nousresearch/hermes-go/pkg/tools"
 )
 
-// httpServer is a minimal HTTP API server for the gateway.
+// httpServer embeds *http.Server to support graceful shutdown via Shutdown().
 type httpServer struct {
-	mux       *http.ServeMux
+	*http.Server
 	sessAgent *agent.SessionAgent
-	logger    *slog.Logger
 }
 
 // newHTTPServer creates an HTTP API server.
 func newHTTPServer(sessAgent *agent.SessionAgent, logger *slog.Logger) *httpServer {
-	s := &httpServer{
-		mux:       http.NewServeMux(),
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /health", healthHandler(sessAgent, logger))
+	mux.HandleFunc("POST /v1/chat", chatHandler(sessAgent, logger))
+	mux.HandleFunc("GET /v1/tools", toolsHandler(logger))
+
+	srv := &http.Server{
+		Handler: mux,
+	}
+
+	return &httpServer{
+		Server:   srv,
 		sessAgent: sessAgent,
-		logger:    logger,
 	}
-	s.registerRoutes()
-	return s
 }
 
-func (s *httpServer) registerRoutes() {
-	s.mux.HandleFunc("GET /health", s.handleHealth)
-	s.mux.HandleFunc("POST /v1/chat", s.handleChat)
-	s.mux.HandleFunc("GET /v1/tools", s.handleTools)
+// healthHandler handles GET /health.
+func healthHandler(sessAgent *agent.SessionAgent, logger *slog.Logger) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
+	}
 }
 
-func (s *httpServer) handleHealth(w http.ResponseWriter, r *http.Request) {
-	json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
+// chatHandler handles POST /v1/chat.
+func chatHandler(sessAgent *agent.SessionAgent, logger *slog.Logger) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		defer r.Body.Close()
+
+		var req chatRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, "invalid JSON: "+err.Error(), http.StatusBadRequest)
+			return
+		}
+
+		if req.Message == "" {
+			http.Error(w, "field 'message' is required", http.StatusBadRequest)
+			return
+		}
+
+		resp, err := sessAgent.Chat(r.Context(), req.Message)
+		if err != nil {
+			logger.Error("chat error", "error", err)
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		json.NewEncoder(w).Encode(chatResponse{Message: resp})
+	}
 }
 
-func (s *httpServer) handleChat(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-		return
+// toolsHandler handles GET /v1/tools.
+func toolsHandler(logger *slog.Logger) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		names := tools.List()
+		json.NewEncoder(w).Encode(map[string]any{"tools": names})
 	}
-	defer r.Body.Close()
-
-	var req chatRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "invalid JSON: "+err.Error(), http.StatusBadRequest)
-		return
-	}
-
-	if req.Message == "" {
-		http.Error(w, "field 'message' is required", http.StatusBadRequest)
-		return
-	}
-
-	resp, err := s.sessAgent.Chat(r.Context(), req.Message)
-	if err != nil {
-		s.logger.Error("chat error", "error", err)
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	json.NewEncoder(w).Encode(chatResponse{Message: resp})
-}
-
-func (s *httpServer) handleTools(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-	names := tools.List()
-	json.NewEncoder(w).Encode(map[string]any{"tools": names})
-}
-
-func (s *httpServer) Serve(addr string) error {
-	s.logger.Info("HTTP API server listening", "addr", addr)
-	return http.ListenAndServe(addr, s.mux)
 }
 
 // chatRequest is the POST /v1/chat request body.

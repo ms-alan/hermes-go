@@ -137,10 +137,13 @@ func main() {
 	}
 
 	// HTTP API server (optional)
+	var httpServer *http.Server
 	if *gatewayAddr != "" {
 		srv := newHTTPServer(sessAgent, logger)
+		httpServer = srv.Server
+		srv.Addr = *gatewayAddr
 		go func() {
-			if err := srv.Serve(*gatewayAddr); err != nil && err != http.ErrServerClosed {
+			if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 				logger.Error("HTTP server error", "error", err)
 			}
 		}()
@@ -151,6 +154,11 @@ func main() {
 	signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM)
 	<-sig
 	logger.Info("shutting down...")
+	if httpServer != nil {
+		if err := httpServer.Shutdown(ctx); err != nil {
+			logger.Error("HTTP server shutdown", "error", err)
+		}
+	}
 	for _, a := range adapters {
 		a.Disconnect(ctx)
 	}
