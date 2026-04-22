@@ -38,6 +38,9 @@ func NewAPIClient(appID, appSecret string) (*APIClient, error) {
 }
 
 func (c *APIClient) fetchToken(ctx context.Context, appSecret string) error {
+	// Note: AppID and appSecret are numeric/alphanumeric from QQ Bot config
+	// and are not expected to contain URL-special characters. For stricter
+	// handling, consider net/url encoding if QQ changes credential format.
 	url := "https://login.q.qq.com/getToken?grant_type=client_credentials&client_id=" + c.AppID + "&client_secret=" + appSecret
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {

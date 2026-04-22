@@ -211,11 +211,7 @@ func (s *Store) Search(opts SearchOptions) ([]SearchResult, error) {
 		matches[i].Context = ctx
 	}
 
-	// Remove full content from result (snippet is enough).
-	for i := range matches {
-		_ = matches[i] // content already excluded via SELECT snippet not content
-	}
-
+	// Content already excluded via SELECT snippet (not content), no need to clear it.
 	return matches, nil
 }
 

@@ -45,10 +45,6 @@ type slogLogger struct {
 	log *slog.Logger
 }
 
-func newSlogLogger() *slogLogger {
-	return &slogLogger{log: slog.Default()}
-}
-
 func (s *slogLogger) Debug(msg string, args ...any) { s.log.Debug(msg, args...) }
 func (s *slogLogger) Info(msg string, args ...any)  { s.log.Info(msg, args...) }
 func (s *slogLogger) Warn(msg string, args ...any) { s.log.Warn(msg, args...) }

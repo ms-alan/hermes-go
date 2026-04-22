@@ -95,7 +95,7 @@ var terminalSchema = map[string]any{
 
 var webSearchSchema = map[string]any{
 	"name":        "web_search",
-	"description": "Search the web for information. Returns up to 5 relevant results with titles, URLs, and descriptions. Requires a search API key to be configured.",
+	"description": "[PLACEHOLDER] Web search is not yet implemented. This tool always returns a not-yet-implemented message. To enable, configure a search API backend (e.g. Tavily, Exa, SerpAPI) in builtin.go.",
 	"parameters": map[string]any{
 		"type": "object",
 		"properties": map[string]any{
