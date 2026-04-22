@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"log/slog"
+	"net/http"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -137,9 +138,11 @@ func main() {
 
 	// HTTP API server (optional)
 	if *gatewayAddr != "" {
+		srv := newHTTPServer(sessAgent, logger)
 		go func() {
-			logger.Info("HTTP gateway on", "addr", *gatewayAddr)
-			// TODO: implement HTTP API
+			if err := srv.Serve(*gatewayAddr); err != nil && err != http.ErrServerClosed {
+				logger.Error("HTTP server error", "error", err)
+			}
 		}()
 	}
 
@@ -166,8 +169,16 @@ func (h *qqHandler) HandleInbound(ctx context.Context, msg *gateway.InboundMessa
 		h.logger.Error("chat error", "error", err)
 		response = "抱歉，处理消息时出错了。"
 	}
-	_, err = h.adapter.SendText(ctx, msg.ChatID, response)
-	return err
+	result, err := h.adapter.SendText(ctx, msg.ChatID, response)
+	if err != nil {
+		h.logger.Error("send error", "chat_id", msg.ChatID, "error", err)
+		return fmt.Errorf("send failed: %w", err)
+	}
+	if !result.Success {
+		h.logger.Warn("send reported failure", "chat_id", msg.ChatID, "error", result.Error)
+		return fmt.Errorf("send unsuccessful: %s", result.Error)
+	}
+	return nil
 }
 
 func envOr(key, defaultVal string) string {

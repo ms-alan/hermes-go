@@ -1,8 +1,9 @@
-# Binaries
-hermes
-hermes-gateway
-gateway
+# Binaries (anchored to repo root — do not match cmd/ subdirectories)
+/hermes
+/hermes-gateway
+/gateway
 *.exe
+*.test
 
 # IDE
 .idea/
