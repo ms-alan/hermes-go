@@ -50,7 +50,11 @@ func main() {
 	}
 
 	// Load configuration from ~/.hermes/config.yaml.
-	home, _ := os.UserHomeDir()
+	home, err := os.UserHomeDir()
+	if err != nil {
+		logger.Warn("cannot determine home directory, using /tmp")
+		home = "/tmp"
+	}
 	cfgPath := filepath.Join(home, ".hermes", "config.yaml")
 	loader := config.NewLoader(config.WithConfigFiles(cfgPath), config.WithLogger(logger))
 	cfg, err := loader.Load()
