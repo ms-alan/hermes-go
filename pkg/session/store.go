@@ -1,3 +1,5 @@
+// Package session provides SQLite-backed session storage with FTS5 full-text
+// search for persistent conversation history across restarts.
 package session
 
 import (
