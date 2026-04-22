@@ -3,6 +3,7 @@ package config
 import (
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -147,9 +148,10 @@ type PlatformSlackConfig struct {
 
 // Loader handles configuration loading with multi-file merging and env overrides
 type Loader struct {
-	configFiles []string
-	envPrefix   string
+	configFiles  []string
+	envPrefix    string
 	secretsPaths []string
+	logger       *slog.Logger
 }
 
 // Option is a functional option for Loader
@@ -173,6 +175,14 @@ func WithEnvPrefix(prefix string) Option {
 func WithSecretsPaths(paths ...string) Option {
 	return func(l *Loader) {
 		l.secretsPaths = paths
+	}
+}
+
+// WithLogger sets the logger used to report load warnings (e.g. missing config files).
+// If not set, warnings are silently dropped.
+func WithLogger(logger *slog.Logger) Option {
+	return func(l *Loader) {
+		l.logger = logger
 	}
 }
 
@@ -216,6 +226,9 @@ func (l *Loader) loadFile(path string, cfg *Config) error {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		if os.IsNotExist(err) {
+			if l.logger != nil && path != "" {
+				l.logger.Warn("config file not found, using defaults", "path", path)
+			}
 			return nil // Skip missing files
 		}
 		return err
@@ -567,7 +580,7 @@ func Load(configPaths ...string) (*Config, error) {
 		}
 	}
 
-	loader := NewLoader(WithConfigFiles(configPaths...))
+	loader := NewLoader(WithConfigFiles(configPaths...), WithLogger(slog.Default()))
 	return loader.Load()
 }
 

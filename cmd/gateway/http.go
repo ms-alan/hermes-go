@@ -58,7 +58,7 @@ func (s *httpServer) handleChat(w http.ResponseWriter, r *http.Request) {
 	resp, err := s.sessAgent.Chat(r.Context(), req.Message)
 	if err != nil {
 		s.logger.Error("chat error", "error", err)
-		json.NewEncoder(w).Encode(chatResponse{Error: err.Error()})
+		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 	json.NewEncoder(w).Encode(chatResponse{Message: resp})

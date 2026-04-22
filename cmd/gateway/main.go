@@ -52,7 +52,7 @@ func main() {
 	// Load configuration from ~/.hermes/config.yaml.
 	home, _ := os.UserHomeDir()
 	cfgPath := filepath.Join(home, ".hermes", "config.yaml")
-	loader := config.NewLoader(config.WithConfigFiles(cfgPath))
+	loader := config.NewLoader(config.WithConfigFiles(cfgPath), config.WithLogger(logger))
 	cfg, err := loader.Load()
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "config load error:", err)
