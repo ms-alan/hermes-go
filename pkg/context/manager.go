@@ -13,7 +13,6 @@ import (
 
 // ManagerConfig holds the context window manager configuration.
 type ManagerConfig struct {
-	// ModelContextLength is the maximum token capacity of the model.
 	ModelContextLength int
 	// ReservedTokens is the number of tokens reserved for system prompt / overhead.
 	ReservedTokens int
@@ -21,6 +20,9 @@ type ManagerConfig struct {
 	CompressionConfig CompressorConfig
 	// CacheTTL is the TTL for system prompt caching.
 	CacheTTL time.Duration
+	// SummarizerModel is the model name used for context compression summaries.
+	// If empty, uses the same model as the main LLM.
+	SummarizerModel string
 }
 
 // DefaultManagerConfig returns sensible defaults.
@@ -89,7 +91,12 @@ func NewManager(cfg ManagerConfig, logger *slog.Logger, llmClient LLMClient) *Ma
 		logger = slog.Default()
 	}
 	cache := NewTTLCache(cfg.CacheTTL)
-	comp := NewContextCompressor(cfg.CompressionConfig, logger, &contextClient{client: llmClient, model: "compact"})
+	// Use SummarizerModel if configured, otherwise fall back to "compact".
+	summarizerModel := cfg.SummarizerModel
+	if summarizerModel == "" {
+		summarizerModel = "compact"
+	}
+	comp := NewContextCompressor(cfg.CompressionConfig, logger, &contextClient{client: llmClient, model: summarizerModel})
 	return &Manager{
 		config:       cfg,
 		logger:       logger,
