@@ -19,6 +19,7 @@ import (
 	"github.com/nousresearch/hermes-go/pkg/model"
 	"github.com/nousresearch/hermes-go/pkg/session"
 	"github.com/nousresearch/hermes-go/pkg/skill"
+	"github.com/nousresearch/hermes-go/pkg/tools"
 )
 
 func main() {
@@ -90,7 +91,7 @@ func main() {
 
 	// Context manager
 	ctxMgr := agentcontext.NewManager(
-		agentcontext.DefaultManagerConfig(128000),
+		agentcontext.DefaultManagerConfig(200000),
 		logger,
 		modelClient,
 	)
@@ -98,10 +99,14 @@ func main() {
 	// AIAgent
 	agentCfg := agent.Config{
 		Model:         envOr("HERMES_MODEL", "gpt-4o"),
-		MaxIterations: 10,
+		MaxIterations: 90,
 		Logger:        logger,
 	}
 	aiAgent := agent.NewAIAgent(modelClient, agentCfg)
+
+	// Register built-in tools so gateway can handle tool calls from QQ messages
+	tools.RegisterBuiltinToolsToAgent(aiAgent)
+	aiAgent.SyncToolsToConfig()
 
 	// Session agent
 	sessAgent := agent.NewSessionAgent(aiAgent, store, ctxMgr, logger)
