@@ -172,14 +172,18 @@ func parseBracketList(s string) []string {
 }
 
 // LoadGoPlugin loads a Go plugin (.so file, Linux only).
+// STUB: this function is not yet implemented and always returns an error.
+// Real implementation requires runtime/plugin and a compiled .so file.
+// Only available on Linux; returns an error on all other platforms.
 func (l *Loader) LoadGoPlugin(path string) error {
 	if runtime.GOOS != "linux" {
-		return fmt.Errorf("Go plugins are only supported on Linux")
+		return fmt.Errorf("Go plugins are only supported on Linux (current: %s)", runtime.GOOS)
 	}
-	// Uses plugin.Open — requires runtime/plugin import at call site
-	// This is a stub; real implementation needs plugin package
+	// Uses plugin.Open — requires runtime/plugin import at call site.
+	// This is a stub; real implementation needs to compile the skill as a
+	// Go plugin (.so) and use plugin.Open to load the .so file.
 	_ = path
-	return fmt.Errorf("Go plugin loading: not yet implemented")
+	return fmt.Errorf("LoadGoPlugin: not yet implemented (Go plugin loading requires pre-compiled .so)")
 }
 
 // makeShellHandler creates a skill handler that runs a shell script.
