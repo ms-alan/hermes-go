@@ -181,6 +181,29 @@ END;
 	return nil
 }
 
+// columnExists checks if a column already exists in a table.
+// Used by migrations to make ALTER TABLE ADD COLUMN idempotent.
+func columnExists(conn *sql.DB, table, column string) bool {
+	rows, err := conn.Query(fmt.Sprintf("PRAGMA table_info(%s)", table))
+	if err != nil {
+		return false
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var cid int
+		var name string
+		var ctype string
+		var notnull int
+		var dflt_value interface{}
+		var pk int
+		rows.Scan(&cid, &name, &ctype, &notnull, &dflt_value, &pk)
+		if name == column {
+			return true
+		}
+	}
+	return false
+}
+
 func (s *Store) runMigrations() error {
 	var version int
 	row := s.conn.QueryRow("SELECT version FROM schema_version LIMIT 1")
@@ -193,63 +216,92 @@ func (s *Store) runMigrations() error {
 		return err
 	}
 
-	migrations := []struct {
-		to   int
-		ddl  string
-		add  []string // ALTER TABLE sessions ADD COLUMN ...
-	}{
-		{
-			to: 2,
-			ddl: `ALTER TABLE messages ADD COLUMN finish_reason TEXT`,
-		},
-		{
-			to: 3,
-			ddl: `ALTER TABLE sessions ADD COLUMN title TEXT`,
-		},
-		{
-			to: 4,
-			ddl: `CREATE UNIQUE INDEX IF NOT EXISTS idx_sessions_title_unique ON sessions(title) WHERE title IS NOT NULL`,
-		},
-		{
-			to: 5,
-			add: []string{
-				`ALTER TABLE sessions ADD COLUMN cache_read_tokens INTEGER DEFAULT 0`,
-				`ALTER TABLE sessions ADD COLUMN cache_write_tokens INTEGER DEFAULT 0`,
-				`ALTER TABLE sessions ADD COLUMN reasoning_tokens INTEGER DEFAULT 0`,
-				`ALTER TABLE sessions ADD COLUMN billing_provider TEXT`,
-				`ALTER TABLE sessions ADD COLUMN billing_base_url TEXT`,
-				`ALTER TABLE sessions ADD COLUMN billing_mode TEXT`,
-				`ALTER TABLE sessions ADD COLUMN estimated_cost_usd REAL`,
-				`ALTER TABLE sessions ADD COLUMN actual_cost_usd REAL`,
-				`ALTER TABLE sessions ADD COLUMN cost_status TEXT`,
-				`ALTER TABLE sessions ADD COLUMN cost_source TEXT`,
-				`ALTER TABLE sessions ADD COLUMN pricing_version TEXT`,
-			},
-		},
-		{
-			to: 6,
-			add: []string{
-				`ALTER TABLE messages ADD COLUMN reasoning TEXT`,
-				`ALTER TABLE messages ADD COLUMN reasoning_details TEXT`,
-				`ALTER TABLE messages ADD COLUMN codex_reasoning_items TEXT`,
-			},
-		},
-	}
-
-	for _, m := range migrations {
-		if version < m.to {
-			if m.ddl != "" {
-				s.conn.Exec(m.ddl) //nolint:errcheck
+	// v2: add finish_reason to messages
+	if version < 2 {
+		if !columnExists(s.conn, "messages", "finish_reason") {
+			if _, err := s.conn.Exec("ALTER TABLE messages ADD COLUMN finish_reason TEXT"); err != nil {
+				return fmt.Errorf("migration v2: %w", err)
 			}
-			for _, add := range m.add {
-				s.conn.Exec(add) //nolint:errcheck
-			}
-			s.conn.Exec("UPDATE schema_version SET version = ?", m.to) //nolint:errcheck
 		}
+		if _, err := s.conn.Exec("UPDATE schema_version SET version = 2"); err != nil {
+			return fmt.Errorf("migration v2: update version: %w", err)
+		}
+		version = 2
 	}
 
-	// Ensure title index exists (safe to re-run)
-	s.conn.Exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_sessions_title_unique ON sessions(title) WHERE title IS NOT NULL`) //nolint:errcheck
+	// v3: add title to sessions
+	if version < 3 {
+		if !columnExists(s.conn, "sessions", "title") {
+			if _, err := s.conn.Exec("ALTER TABLE sessions ADD COLUMN title TEXT"); err != nil {
+				return fmt.Errorf("migration v3: %w", err)
+			}
+		}
+		if _, err := s.conn.Exec("UPDATE schema_version SET version = 3"); err != nil {
+			return fmt.Errorf("migration v3: update version: %w", err)
+		}
+		version = 3
+	}
+
+	// v4: create unique title index
+	if version < 4 {
+		if _, err := s.conn.Exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_sessions_title_unique ON sessions(title) WHERE title IS NOT NULL`); err != nil {
+			return fmt.Errorf("migration v4: %w", err)
+		}
+		if _, err := s.conn.Exec("UPDATE schema_version SET version = 4"); err != nil {
+			return fmt.Errorf("migration v4: update version: %w", err)
+		}
+		version = 4
+	}
+
+	// v5: add token/billing columns to sessions
+	if version < 5 {
+		for _, col := range []struct {
+			name, def string
+		}{
+			{"cache_read_tokens", "ALTER TABLE sessions ADD COLUMN cache_read_tokens INTEGER DEFAULT 0"},
+			{"cache_write_tokens", "ALTER TABLE sessions ADD COLUMN cache_write_tokens INTEGER DEFAULT 0"},
+			{"reasoning_tokens", "ALTER TABLE sessions ADD COLUMN reasoning_tokens INTEGER DEFAULT 0"},
+			{"billing_provider", "ALTER TABLE sessions ADD COLUMN billing_provider TEXT"},
+			{"billing_base_url", "ALTER TABLE sessions ADD COLUMN billing_base_url TEXT"},
+			{"billing_mode", "ALTER TABLE sessions ADD COLUMN billing_mode TEXT"},
+			{"estimated_cost_usd", "ALTER TABLE sessions ADD COLUMN estimated_cost_usd REAL"},
+			{"actual_cost_usd", "ALTER TABLE sessions ADD COLUMN actual_cost_usd REAL"},
+			{"cost_status", "ALTER TABLE sessions ADD COLUMN cost_status TEXT"},
+			{"cost_source", "ALTER TABLE sessions ADD COLUMN cost_source TEXT"},
+			{"pricing_version", "ALTER TABLE sessions ADD COLUMN pricing_version TEXT"},
+		} {
+			if !columnExists(s.conn, "sessions", col.name) {
+				if _, err := s.conn.Exec(col.def); err != nil {
+					return fmt.Errorf("migration v5 (%s): %w", col.name, err)
+				}
+			}
+		}
+		if _, err := s.conn.Exec("UPDATE schema_version SET version = 5"); err != nil {
+			return fmt.Errorf("migration v5: update version: %w", err)
+		}
+		version = 5
+	}
+
+	// v6: add reasoning columns to messages
+	if version < 6 {
+		for _, col := range []struct {
+			name, def string
+		}{
+			{"reasoning", "ALTER TABLE messages ADD COLUMN reasoning TEXT"},
+			{"reasoning_details", "ALTER TABLE messages ADD COLUMN reasoning_details TEXT"},
+			{"codex_reasoning_items", "ALTER TABLE messages ADD COLUMN codex_reasoning_items TEXT"},
+		} {
+			if !columnExists(s.conn, "messages", col.name) {
+				if _, err := s.conn.Exec(col.def); err != nil {
+					return fmt.Errorf("migration v6 (%s): %w", col.name, err)
+				}
+			}
+		}
+		if _, err := s.conn.Exec("UPDATE schema_version SET version = 6"); err != nil {
+			return fmt.Errorf("migration v6: update version: %w", err)
+		}
+		version = 6
+	}
 
 	return nil
 }
