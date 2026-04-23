@@ -71,6 +71,130 @@ var fileWriteSchema = map[string]any{
 	},
 }
 
+var browserNavigateSchema = map[string]any{
+	"name":        "browser_navigate",
+	"description": "Navigate to a URL and get a text summary of the page.",
+	"parameters": map[string]any{
+		"type": "object",
+		"properties": map[string]any{
+			"url": map[string]any{
+				"type":        "string",
+				"description": "URL to navigate to (http/https)",
+			},
+		},
+		"required": []any{"url"},
+	},
+}
+
+var browserSnapshotSchema = map[string]any{
+	"name":        "browser_snapshot",
+	"description": "Get a text snapshot of the current browser page.",
+	"parameters": map[string]any{
+		"type": "object",
+		"properties":  map[string]any{},
+	},
+}
+
+var browserScreenshotSchema = map[string]any{
+	"name":        "browser_screenshot",
+	"description": "Take a screenshot of the current page and save to a file.",
+	"parameters": map[string]any{
+		"type": "object",
+		"properties": map[string]any{
+			"path": map[string]any{
+				"type":        "string",
+				"description": "Optional path to save the screenshot (default: ~/Downloads/hermes_screenshot.png)",
+			},
+			"question": map[string]any{
+				"type":        "string",
+				"description": "Optional question about the screenshot (for AI analysis via vision_analyze)",
+			},
+		},
+	},
+}
+
+var browserClickSchema = map[string]any{
+	"name":        "browser_click",
+	"description": "Click an element on the current page.",
+	"parameters": map[string]any{
+		"type": "object",
+		"properties": map[string]any{
+			"ref": map[string]any{
+				"type":        "string",
+				"description": "Element reference from browser_snapshot (e.g. @e5)",
+			},
+			"selector": map[string]any{
+				"type":        "string",
+				"description": "CSS selector (alternative to ref)",
+			},
+		},
+		"required": []any{},
+	},
+}
+
+var browserTypeSchema = map[string]any{
+	"name":        "browser_type",
+	"description": "Type text into an input field.",
+	"parameters": map[string]any{
+		"type": "object",
+		"properties": map[string]any{
+			"ref": map[string]any{
+				"type":        "string",
+				"description": "Element reference from browser_snapshot (e.g. @e3)",
+			},
+			"selector": map[string]any{
+				"type":        "string",
+				"description": "CSS selector (alternative to ref)",
+			},
+			"text": map[string]any{
+				"type":        "string",
+				"description": "Text to type",
+			},
+		},
+		"required": []any{"text"},
+	},
+}
+
+var browserBackSchema = map[string]any{
+	"name":        "browser_back",
+	"description": "Navigate back to the previous page.",
+	"parameters": map[string]any{
+		"type": "object",
+		"properties":  map[string]any{},
+	},
+}
+
+var browserScrollSchema = map[string]any{
+	"name":        "browser_scroll",
+	"description": "Scroll the current page up or down.",
+	"parameters": map[string]any{
+		"type": "object",
+		"properties": map[string]any{
+			"direction": map[string]any{
+				"type":        "string",
+				"enum":        []any{"up", "down"},
+				"description": "Direction to scroll (up or down)",
+			},
+		},
+		"required": []any{"direction"},
+	},
+}
+
+var browserPressSchema = map[string]any{
+	"name":        "browser_press",
+	"description": "Press a keyboard key on the current page.",
+	"parameters": map[string]any{
+		"type": "object",
+		"properties": map[string]any{
+			"key": map[string]any{
+				"type":        "string",
+				"description": "Key to press (Enter, Tab, Escape, ArrowUp, ArrowDown, etc.)",
+			},
+		},
+		"required": []any{"key"},
+	},
+}
+
 var processSchema = map[string]any{
 	"name":        "process",
 	"description": "Manage background processes — list, get, register, unregister.",
@@ -761,8 +885,104 @@ func init() {
 		nil,
 		nil,
 		false,
-		"Manage scheduled cron jobs — create/list/get/remove/pause/resume/run",
+		"Manage scheduled cron jobs — create, list, remove, pause, resume, run",
 		"⏰",
+	)
+
+	Register(
+		"browser_navigate",
+		"builtin",
+		browserNavigateSchema,
+		browserNavigateHandler,
+		nil,
+		nil,
+		false,
+		"Open a URL in a headless Chrome browser and get a text summary",
+		"🌐",
+	)
+
+	Register(
+		"browser_snapshot",
+		"builtin",
+		browserSnapshotSchema,
+		browserSnapshotHandler,
+		nil,
+		nil,
+		false,
+		"Get a text snapshot of the current browser page",
+		"📄",
+	)
+
+	Register(
+		"browser_screenshot",
+		"builtin",
+		browserScreenshotSchema,
+		browserVisionHandler,
+		nil,
+		nil,
+		false,
+		"Take a screenshot of the current browser page and save to file",
+		"📸",
+	)
+
+	Register(
+		"browser_click",
+		"builtin",
+		browserClickSchema,
+		browserClickHandler,
+		nil,
+		nil,
+		false,
+		"Click an element on the current page by selector or ref",
+		"👆",
+	)
+
+	Register(
+		"browser_type",
+		"builtin",
+		browserTypeSchema,
+		browserTypeHandler,
+		nil,
+		nil,
+		false,
+		"Type text into an input field identified by selector or ref",
+		"⌨️",
+	)
+
+	Register(
+		"browser_back",
+		"builtin",
+		browserBackSchema,
+		browserBackHandler,
+		nil,
+		nil,
+		false,
+		"Navigate back to the previous page",
+		"⬅️",
+	)
+
+	Register(
+		"browser_scroll",
+		"builtin",
+		browserScrollSchema,
+		browserScrollHandler,
+		nil,
+		nil,
+		false,
+		"Scroll the current page up or down",
+		"📜",
+	)
+
+	Register(
+		"browser_press",
+		"builtin",
+		browserPressSchema,
+		browserPressHandler,
+		nil,
+		nil,
+		false,
+		"Press a keyboard key (Enter, Tab, Escape, ArrowUp, etc.)",
+		"⌨️",
 	)
 }
 
