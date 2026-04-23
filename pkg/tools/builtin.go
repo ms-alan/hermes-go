@@ -1125,6 +1125,18 @@ func init() {
 	)
 
 	Register(
+		"execute_code",
+		"builtin",
+		CodeExecutionSchema,
+		executeCodeHandler,
+		nil,
+		nil,
+		false,
+		"Execute a Python script in a sandboxed environment with Hermes tool access",
+		"⚡",
+	)
+
+	Register(
 		"vision_analyze",
 		"builtin",
 		visionSchema,
@@ -1132,7 +1144,7 @@ func init() {
 		nil,
 		nil,
 		false,
-		"Analyze images with AI vision — local file, URL, or screenshot",
+		"Use vision to analyze an image or screenshot",
 		"👁️",
 	)
 
