@@ -135,6 +135,9 @@ func (t *StdioTransport) Send(ctx context.Context, method string, params map[str
 
 	select {
 	case <-ctx.Done():
+		// Close stdin to signal EOF to the subprocess, which causes
+		// the read goroutine to abort naturally instead of leaking.
+		t.stdin.Close() //nolint:errcheck
 		return nil, ctx.Err()
 	case err := <-errCh:
 		return nil, fmt.Errorf("read response: %w", err)
