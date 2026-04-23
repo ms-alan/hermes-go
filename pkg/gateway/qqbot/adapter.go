@@ -208,6 +208,9 @@ func (a *Adapter) handleAtMessageCreate(ctx context.Context, data json.RawMessag
 func (a *Adapter) reconnect(ctx context.Context) {
 	a.logger.Warn("qqbot reconnecting...")
 	if a.conn != nil { a.conn.Close(websocket.StatusNormalClosure, "reconnect") }
-	time.Sleep(5 * time.Second)
-	if err := a.Connect(ctx); err != nil { a.logger.Error("qqbot reconnect failed", "error", err) }
+	a.running.Store(false) // Clear so Connect() will actually reconnect
+	a.connCtx, a.connCancel = context.WithCancel(context.Background())
+	if err := a.Connect(ctx); err != nil {
+		a.logger.Error("qqbot reconnect failed", "error", err)
+	}
 }

@@ -10,8 +10,8 @@ type Platform string
 
 const (
 	PlatformQQ       Platform = "qq"
-	PlatformTelegram Platform = "telegram"
-	PlatformDiscord  Platform = "discord"
+	PlatformTelegram Platform = "telegram" // TODO: implement adapter
+	PlatformDiscord  Platform = "discord"  // TODO: implement adapter
 )
 
 // MessageType categorizes an inbound message.
