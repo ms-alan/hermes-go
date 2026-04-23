@@ -91,7 +91,7 @@ func (a *AIAgent) RunWithMessages(ctx context.Context, messages []*model.Message
 
 		// Debug: print context before LLM call
 		if debugJSON, err := json.MarshalIndent(req, "", "  "); err == nil {
-			a.logger.Info(string(debugJSON))
+			fmt.Printf(">>> LLM REQUEST CONTEXT (iteration %d):\n%s\n", iteration, debugJSON)
 		}
 
 		// Call the LLM
@@ -186,7 +186,7 @@ func (a *AIAgent) RunConversation(ctx context.Context, userMessage string, syste
 
 		// Debug: print context before LLM call
 		if debugJSON, err := json.MarshalIndent(req, "", "  "); err == nil {
-			a.logger.Info(string(debugJSON))
+			fmt.Printf(">>> LLM REQUEST CONTEXT (iteration %d):\n%s\n", iteration, debugJSON)
 		}
 
 		// Call the LLM
