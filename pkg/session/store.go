@@ -6,6 +6,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"math/rand"
 	"os"
 	"path/filepath"
@@ -70,8 +71,10 @@ func (s *Store) Close() error {
 	s.lock.Lock()
 	defer s.lock.Unlock()
 	if s.conn != nil {
-		// Best-effort checkpoint
-		s.conn.Exec("PRAGMA wal_checkpoint(PASSIVE)") //nolint:errcheck
+		// Best-effort checkpoint; log warning on failure but still close.
+		if _, err := s.conn.Exec("PRAGMA wal_checkpoint(PASSIVE)"); err != nil {
+			slog.Warn("WAL checkpoint failed", "error", err)
+		}
 		return s.conn.Close()
 	}
 	return nil
