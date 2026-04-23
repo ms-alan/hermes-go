@@ -73,8 +73,9 @@ func newREPL(agentCfg agent.Config, store *session.Store, logger *slog.Logger, m
 	}
 	hermesmemory.SetMemoryStore(memStore)
 
-	// Create context file loader
-	ctxLoader := hermescontext.NewLoader("", "")
+	// Create context file loader (hermesHome defaults to ~/.hermes, cwd for project context)
+	cwd, _ := os.Getwd()
+	ctxLoader := hermescontext.NewLoader("", cwd)
 
 	// Build system prompt from SOUL.md and memory
 	systemPrompt := buildSystemPrompt(ctxLoader, memStore)
