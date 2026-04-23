@@ -118,6 +118,7 @@ func (a *AIAgent) RunWithMessages(ctx context.Context, messages []*model.Message
 			for _, tc := range assistantMsg.ToolCalls {
 				toolName := tc.Function.Name
 				rawArgs := string(tc.Function.Arguments)
+				fmt.Printf(">>> TOOL CALL: tool=%s rawArgs=%s\n", toolName, rawArgs)
 
 				// Parse arguments into a map
 				var argsMap map[string]any
@@ -223,6 +224,7 @@ func (a *AIAgent) RunConversation(ctx context.Context, userMessage string, syste
 			for _, tc := range assistantMsg.ToolCalls {
 				toolName := tc.Function.Name
 				rawArgs := string(tc.Function.Arguments)
+				fmt.Printf(">>> TOOL CALL: tool=%s rawArgs=%s\n", toolName, rawArgs)
 
 				// Parse arguments into a map
 				var argsMap map[string]any
