@@ -225,7 +225,7 @@ var processSchema = map[string]any{
 
 var terminalSchema = map[string]any{
 	"name":        "terminal",
-	"description": "Execute a shell command in the terminal and return stdout and stderr output. The command runs in the process's current working directory unless cwd is provided.",
+	"description": "Execute a shell command in a terminal and return stdout and stderr output. Supports multiple backends: 'local' (default), 'docker:<name>' (docker exec), 'ssh:<name>' (SSH remote).",
 	"parameters": map[string]any{
 		"type": "object",
 		"properties": map[string]any{
@@ -241,6 +241,11 @@ var terminalSchema = map[string]any{
 			"cwd": map[string]any{
 				"type":        "string",
 				"description": "Working directory for the command (default: current directory)",
+			},
+			"backend": map[string]any{
+				"type":        "string",
+				"description": "Execution backend: 'local' (default), 'docker:<id>', 'ssh:<id>', or 'ssh' (connect to host directly)",
+				"default":     "local",
 			},
 		},
 		"required": []any{"command"},
@@ -854,11 +859,11 @@ func init() {
 		"terminal",
 		"builtin",
 		terminalSchema,
-		terminalHandler,
+		runTerminalCommand,
 		checkTerminalEnv,
 		nil,
 		false,
-		"Execute a shell command and return its output",
+		"Execute shell commands locally or via docker/SSH",
 		"💻",
 	)
 
