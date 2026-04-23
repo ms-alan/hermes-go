@@ -287,6 +287,19 @@ func runSingleDelegate(goal, contextStr string, toolsets []string, timeoutSec, t
 		MaxIterations: 90,
 		Logger:       slog.Default(),
 	})
+
+	// Register all built-in tools into the child agent.
+	RegisterBuiltinToolsToAgent(childAgent)
+
+	// Strip blocked tools so the child cannot use dangerous or recursive tools.
+	blocked := BlockedToolsForDepth(childDepth)
+	for name := range blocked {
+		childAgent.UnregisterTool(name)
+	}
+
+	// Sync tools into childAgent.Config.Tools so they are sent to the LLM.
+	childAgent.SyncToolsToConfig()
+
 	_ = store
 
 	// Build messages: system prompt injected by RunWithMessages.

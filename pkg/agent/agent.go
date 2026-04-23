@@ -49,6 +49,18 @@ func (a *AIAgent) RegisterTool(name string, handler ToolHandler, def *ToolDef) {
 	}
 }
 
+// Tools returns the agent's current tool handlers map (unexported field).
+// Safe for read-only access; prefer Tools() over direct field access.
+func (a *AIAgent) Tools() map[string]ToolHandler {
+	return a.tools
+}
+
+// UnregisterTool removes a tool handler and its metadata by name.
+func (a *AIAgent) UnregisterTool(name string) {
+	delete(a.tools, name)
+	delete(a.toolDefs, name)
+}
+
 // GetToolDefs returns the tool metadata map for introspection.
 func (a *AIAgent) GetToolDefs() map[string]*ToolDef {
 	return a.toolDefs
