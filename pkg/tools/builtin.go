@@ -1088,6 +1088,42 @@ func init() {
 		"Spawn autonomous sub-agents to handle tasks in parallel",
 		"🤖",
 	)
+
+	Register(
+		"patch",
+		"builtin",
+		patchSchema,
+		patchHandler,
+		nil,
+		nil,
+		false,
+		"Apply targeted find-and-replace edits to files — simple replace or V4A multi-file patch",
+		"🩹",
+	)
+
+	Register(
+		"clarify",
+		"builtin",
+		clarifySchema,
+		clarifyHandler,
+		nil,
+		nil,
+		false,
+		"Ask the user a clarifying question — multiple choice or free-form",
+		"❓",
+	)
+
+	Register(
+		"search_files",
+		"builtin",
+		searchFilesSchema,
+		searchFilesHandler,
+		nil,
+		nil,
+		false,
+		"Search file contents with ripgrep (rg) or find files by name — respects .gitignore",
+		"🔎",
+	)
 }
 
 // ---------------------------------------------------------------------------
