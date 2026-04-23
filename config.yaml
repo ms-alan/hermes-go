@@ -1,0 +1,121 @@
+# hermes-go Configuration Example
+# Copy to ~/.hermes/config.yaml and adjust to your needs.
+
+# ── Model ──────────────────────────────────────────────────────────────────────
+model:
+  # LLM provider: "openai", "minimax", or custom URL
+  provider: "minimax"
+  # Model name (OpenAI: "gpt-4o", MiniMax: "MiniMax-Text-01", etc.)
+  model_name: "MiniMax-M2.7"
+  # API key — or set OPENAI_API_KEY / MINIMAX_API_KEY env var
+  api_key: "sk-cp-raVawRHw76ZA2H87kc1a2cbwgOf4i6GwZYEud5gi_PT6SSKkOZn67TX9KeATFR-gT23NJpXadPeyBikwAbLjhDi8Fhq9EmcfU_m2LX1rrojQJeGo-YAiekQ"
+  # Base URL for OpenAI-compatible APIs
+  # OpenAI:    "https://api.openai.com/v1"
+  MiniMax:   "https://api.minimaxi.com/anthropic"
+  # Custom:     "https://your-custom-endpoint.com/v1"
+  api_base: "https://api.minimaxi.com/anthropic"
+  temperature: 0.7
+  max_tokens: 4096
+  top_p: 1.0
+  frequency_penalty: 0.0
+  presence_penalty: 0.0
+  timeout: 60
+
+# ── Agent ─────────────────────────────────────────────────────────────────────
+agent:
+  name: "hermes"
+  version: "0.1.0"
+  description: "AI agent with tool-use capabilities"
+  # Max retry attempts on API errors
+  max_retries: 3
+  retry_delay: 2
+  # Enable chain-of-thought reasoning
+  think_mode: false
+  # Enable persistent memory across sessions
+  memory_enabled: false
+
+# ── Session ───────────────────────────────────────────────────────────────────
+session:
+  # Where to store SQLite session database
+  storage_path: "~/.hermes/sessions.db"
+  # Auto-save after each message
+  auto_save: true
+  auto_save_delay: 1
+  # Max messages to keep in context window
+  max_history: 1000
+  # Session TTL in seconds (0 = forever)
+  session_ttl: 0
+
+# ── Context ───────────────────────────────────────────────────────────────────
+context:
+  # Context window size (tokens). Must not exceed model's context limit.
+  window_size: 200000
+  # Compression strategy: "truncate", "summary", or "rolling"
+  strategy: "rolling"
+  # Enable automatic summarisation to stay within window_size
+  summary_enabled: true
+
+# ── MCP Servers ────────────────────────────────────────────────────────────────
+# Uncomment and fill to connect MCP (Model Context Protocol) servers.
+# mcp_servers:
+#   my-server:
+#     enabled: true
+#     command: "npx"
+#     args: ["-y", "@modelcontextprotocol/server-filesystem", "."]
+#     env:
+#       DEBUG: "true"
+
+# ── Skills ────────────────────────────────────────────────────────────────────
+# skills:
+#   - name: "example-skill"
+#     enabled: true
+#     type: "local"
+#     path: "~/.hermes/skills/example-skill"
+
+# ── Logging ───────────────────────────────────────────────────────────────────
+logging:
+  level: "info"       # debug, info, warn, error
+  format: "text"      # text, json
+  output: "stdout"    # stdout, stderr, or file path
+  file_path: "~/.hermes/hermes.log"
+  max_size: 10       # MB
+  max_backups: 3
+  max_age: 7          # days
+  compress: true
+
+# ── Platforms ─────────────────────────────────────────────────────────────────
+platforms:
+  qq:
+    enabled: false
+    # QQ Bot credentials — set via env vars QQ_BOT_TOKEN, QQ_APP_ID, QQ_CLIENT_SECRET
+    bot_token: ""
+    app_id: ""
+    app_secret: ""
+    guild_id: ""
+    channel_id: ""
+
+  # dingtalk:
+  #   enabled: false
+  #   client_id: ""
+  #   client_secret: ""
+  #   agent_id: ""
+
+  # wechat:
+  #   enabled: false
+  #   app_id: ""
+  #   app_secret: ""
+  #   token: ""
+  #   encoding_aes_key: ""
+
+  # slack:
+  #   enabled: false
+  #   bot_token: "xoxb-..."
+  #   app_token: "xapp-..."
+  #   signing_secret: ""
+
+# ── Secrets ───────────────────────────────────────────────────────────────────
+# Use ${SECRET:env:VAR_NAME} to reference environment variables.
+# Use ${SECRET:path/to/.env} to load from a .env file.
+# Examples:
+#   api_key: ${SECRET:env:OPENAI_API_KEY}
+#   api_key: ${SECRET:env:MINIMAX_API_KEY}
