@@ -71,6 +71,34 @@ var fileWriteSchema = map[string]any{
 	},
 }
 
+var processSchema = map[string]any{
+	"name":        "process",
+	"description": "Manage background processes — list, get, register, unregister.",
+	"parameters": map[string]any{
+		"type": "object",
+		"properties": map[string]any{
+			"action": map[string]any{
+				"type":        "string",
+				"description": "Action: list, get, register, unregister",
+				"enum":        []any{"list", "get", "register", "unregister"},
+			},
+			"id": map[string]any{
+				"type":        "string",
+				"description": "Process ID (for get/unregister/register)",
+			},
+			"command": map[string]any{
+				"type":        "string",
+				"description": "Command string (for register)",
+			},
+			"sessionId": map[string]any{
+				"type":        "string",
+				"description": "Optional session ID to associate with the process",
+			},
+		},
+		"required": []any{"action"},
+	},
+}
+
 var terminalSchema = map[string]any{
 	"name":        "terminal",
 	"description": "Execute a shell command in the terminal and return stdout and stderr output. The command runs in the process's current working directory unless cwd is provided.",
@@ -684,6 +712,18 @@ func init() {
 		false,
 		"Execute a shell command and return its output",
 		"💻",
+	)
+
+	Register(
+		"process",
+		"builtin",
+		processSchema,
+		processToolHandler,
+		nil,
+		nil,
+		false,
+		"Manage background processes — list, get, register, unregister",
+		"⚙️",
 	)
 
 	Register(
