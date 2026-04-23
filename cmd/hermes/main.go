@@ -86,7 +86,7 @@ func main() {
 	)
 
 	// Run the REPL.
-	repl := newREPL(agentConfig, store, logger, modelClient)
+	repl := newREPL(agentConfig, store, logger, modelClient, model)
 	if sessionID != "" {
 		if err := repl.sessionAgent.Switch(sessionID); err != nil {
 			logger.Warn("failed to resume session", "session_id", sessionID, "error", err)

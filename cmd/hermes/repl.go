@@ -23,10 +23,11 @@ type repl struct {
 	ctxMgr       *ctxmgr.Manager
 	logger       *slog.Logger
 	modelClient  model.LLMClient
+	defaultModel string
 }
 
 // newREPL creates a new REPL instance.
-func newREPL(agentCfg agent.Config, store *session.Store, logger *slog.Logger, modelClient model.LLMClient) *repl {
+func newREPL(agentCfg agent.Config, store *session.Store, logger *slog.Logger, modelClient model.LLMClient, defaultModel string) *repl {
 	if logger == nil {
 		logger = slog.Default()
 	}
@@ -53,6 +54,7 @@ func newREPL(agentCfg agent.Config, store *session.Store, logger *slog.Logger, m
 		ctxMgr:       ctxMgr,
 		logger:       logger,
 		modelClient:  modelClient,
+		defaultModel: defaultModel,
 	}
 }
 
@@ -63,7 +65,7 @@ func (r *repl) Run(ctx context.Context) error {
 	fmt.Println()
 
 	// Auto-create a new session
-	_, err := r.sessionAgent.New("cli", "claude-sonnet-4", "")
+	_, err := r.sessionAgent.New("cli", r.defaultModel, "")
 	if err != nil {
 		r.logger.Warn("failed to create initial session", "error", err)
 	}
@@ -122,7 +124,7 @@ func (r *repl) handleCommand(ctx context.Context, cmd string) error {
 	case "/sessions":
 		r.printSessions()
 	case "/new":
-		sessID, err := r.sessionAgent.New("cli", "claude-sonnet-4", "")
+		sessID, err := r.sessionAgent.New("cli", r.defaultModel, "")
 		if err != nil {
 			return fmt.Errorf("failed to create session: %w", err)
 		}
