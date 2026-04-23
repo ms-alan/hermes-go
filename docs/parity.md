@@ -14,19 +14,20 @@ Green = implemented, Yellow = partial, Red = not yet.
 | Feature | Status | Notes |
 |---------|--------|-------|
 | **Core Agent Loop** | ✅ | `pkg/agent/agent.go` — RunWithMessages, tool calling, iteration limit |
-| **Built-in Tools** | ✅ | `pkg/tools/builtin.go` — file_read, file_write, search_files, grep, bash, web_search (Tavily), delegate_task |
+| **Built-in Tools** | ✅ | `pkg/tools/builtin.go` — file_read, file_write, **file_delete**, terminal, web_search (Tavily), delegate_task |
+| **Dangerous Command Authorization** | ✅ | `pkg/tools/approval.go` — wired into terminal/file_write/file_delete handlers |
 | **Session Management** | ✅ | `pkg/session/` — SQLite store, session create/switch/list/delete |
 | **Context Compression** | ✅ | `pkg/context/compressor.go` — iterative chunked summarization (MaxLLMSummaryInputTokens) |
 | **Graceful Shutdown** | ✅ | `cmd/hermes/main.go` — signal.NotifyContext + stdin close for REPL |
 | **Structured Logging** | ✅ | All packages use `log/slog` (Go 1.21+) |
 | **MCP Client** | ✅ | `pkg/mcp/` — StdioTransport + HTTPTransport, JSON-RPC 2.0 |
-| **MCP Tool Integration** | ✅ | `pkg/tools/mcp_tool.go` — MCP servers register as tools in agent loop |
+| **MCP Tool Integration** | ✅ | `pkg/tools/mcp_tool.go` — init() calls initMCPServers() on load |
 | **Web Search (Tavily)** | ✅ | Real HTTP API via `TAVILY_API_KEY` env var |
 | **Delegate Tool (Subagents)** | ✅ | `pkg/tools/delegate_tool.go` — single + batch mode, depth=1 flat, blocked tools |
+| **Skillsets Hub** | ✅ | `pkg/skill/skillsets.go` + `REPL /skills` command + main.go loads config |
 | **MiniMax Model Client** | ✅ | `pkg/model/minimax.go` — /v1 base URL, double JSON decode fix |
 | **Config (YAML)** | ✅ | `config.Load()` from `~/.hermes/config.yaml` |
-| **REPL Interface** | ✅ | `cmd/hermes/` — readline-style REPL with /help, /tools, /sessions |
-| **QQBot Gateway** | ✅ | `pkg/gateway/qqbot/` — receives messages and routes to agent |
+| **REPL Interface** | ✅ | `cmd/hermes/` — /help, /tools, /sessions, /skills, /new, /switch |
 
 ---
 
