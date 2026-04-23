@@ -276,7 +276,7 @@ var processSchema = map[string]any{
 
 var terminalSchema = map[string]any{
 	"name":        "terminal",
-	"description": "Execute a shell command in a terminal and return stdout and stderr output. Supports multiple backends: 'local' (default), 'docker:<name>' (docker exec), 'ssh:<name>' (SSH remote). Use pty=true for interactive CLI tools (vim, nano, htop, python REPL, etc.) — required for programs that need a controlling terminal.",
+	"description": "Execute a shell command in a terminal and return stdout and stderr output. Supports multiple backends: 'local' (default), 'docker:<id>', 'ssh:<id>', 'singularity:<id>', 'modal:<id>', 'daytona:<id>'. Use pty=true for interactive CLI tools (vim, nano, htop, python REPL, etc.) — required for programs that need a controlling terminal.",
 	"parameters": map[string]any{
 		"type": "object",
 		"properties": map[string]any{
@@ -295,12 +295,12 @@ var terminalSchema = map[string]any{
 			},
 			"backend": map[string]any{
 				"type":        "string",
-				"description": "Execution backend: 'local' (default), 'docker:<id>', 'ssh:<id>', or 'ssh' (connect to host directly)",
+				"description": "Execution backend: 'local' (default), 'docker:<id>', 'ssh:<id>', 'singularity:<id>', 'modal:<id>', 'daytona:<id>'",
 				"default":     "local",
 			},
 			"pty": map[string]any{
 				"type":        "boolean",
-				"description": "Use pseudo-terminal (PTY) for interactive CLI tools. Required for vim, nano, htop, python REPL, Claude Code, etc. Not needed for simple batch commands. local backend only.",
+				"description": "Use pseudo-terminal (PTY) for interactive CLI tools. Required for vim, nano, htop, python REPL, Claude Code, etc. local backend only.",
 				"default":     false,
 			},
 		},
