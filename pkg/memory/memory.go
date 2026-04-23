@@ -1,232 +1,564 @@
-// Package memory provides bounded persistent memory for the agent.
+// Package memory provides persistent curated memory for hermes-go.
 //
-// Two files make up the agent's memory:
-//   - ~/.hermes/memories/MEMORY.md  — agent's personal notes (2,200 chars)
-//   - ~/.hermes/memories/USER.md    — user profile (1,375 chars)
+// Two stores:
+//   - MEMORY.md: agent's personal notes and observations (environment facts,
+//     project conventions, tool quirks, things learned)
+//   - USER.md: what the agent knows about the user (preferences,
+//     communication style, expectations, workflow habits)
 //
-// Both use the same §-delimited entry format compatible with hermes-agent.
+// Both are injected into the system prompt as a frozen snapshot at session
+// start. Mid-session writes update files on disk immediately (durable) but do
+// NOT change the system prompt -- this preserves the prefix cache for the
+// entire session. The snapshot refreshes on the next session start.
+//
+// Entry delimiter: § (section sign). Entries can be multiline.
+// Character limits (not tokens): MEMORY.md 2200, USER.md 1375.
+//
+// Design:
+//   - Single memory tool with action parameter: add, replace, remove, read
+//   - replace/remove use short unique substring matching
+//   - Frozen snapshot pattern: system prompt is stable, tool responses show live state
 package memory
 
 import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
+	"sync"
+	"unicode/utf8"
 )
 
 const (
-	// Char limits matching hermes-agent
-	MemoryMaxChars = 2200
-	UserMaxChars   = 1375
-	EntryDelimiter = " § "
+	// MemoryDir is the subdirectory under HERMES_HOME for memory files.
+	MemoryDir = "memories"
+	// MemoryFile is the agent's personal notes.
+	MemoryFile = "MEMORY.md"
+	// UserFile is the user profile.
+	UserFile = "USER.md"
+	// EntryDelimiter separates entries within a file.
+	EntryDelimiter = "\n§\n"
+
+	// DefaultMemoryCharLimit is the max total chars for MEMORY.md.
+	DefaultMemoryCharLimit = 2200
+	// DefaultUserCharLimit is the max total chars for USER.md.
+	DefaultUserCharLimit = 1375
+
+	// Separator is the line used above/below block headers.
+	Separator = "═"
 )
 
-// Entry represents a single memory entry.
-type Entry struct {
-	Content string
-}
-
-// MemoryStore holds both memory stores.
+// MemoryStore manages bounded curated memory with file persistence.
 type MemoryStore struct {
-	memory *Store
-	user   *Store
+	mu              sync.RWMutex
+	memoryEntries   []string
+	userEntries     []string
+	memDir          string
+	memCharLimit    int
+	userCharLimit   int
+
+	// frozenSnapshot is captured at load time and used for system prompt injection.
+	// Mid-session writes update files but NOT this snapshot.
+	frozenSnapshot map[string]string // "memory" -> block, "user" -> block
+
+	// Threat patterns for injection detection
+	threatPatterns []*threatPattern
 }
 
-// Store is a single file-backed memory store.
-type Store struct {
-	path  string
-	limit int
+type threatPattern struct {
+	regex   *regexp.Regexp
+	patternID string
 }
 
-// EntrySep is the section delimiter used in both files.
-const EntrySep = " § "
-
-// NewMemoryStore creates a memory store that persists to ~/.hermes/memories/.
-func NewMemoryStore() (*MemoryStore, error) {
-	base := filepath.Join(os.Getenv("HOME"), ".hermes", "memories")
-	if err := os.MkdirAll(base, 0755); err != nil {
-		return nil, fmt.Errorf("memory store: mkdir %s: %w", base, err)
-	}
-	return &MemoryStore{
-		memory: &Store{
-			path:  filepath.Join(base, "MEMORY.md"),
-			limit: MemoryMaxChars,
-		},
-		user: &Store{
-			path:  filepath.Join(base, "USER.md"),
-			limit: UserMaxChars,
-		},
-	}, nil
+// NewMemoryStore creates a memory store with the default memory directory.
+func NewMemoryStore() *MemoryStore {
+	home, _ := os.UserHomeDir()
+	memDir := filepath.Join(home, ".hermes", MemoryDir)
+	return NewMemoryStoreWithDir(memDir)
 }
 
-// Load reads entries from a store file.
-func (s *Store) Load() ([]string, error) {
-	data, err := os.ReadFile(s.path)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return nil, nil
-		}
-		return nil, fmt.Errorf("memory load: %w", err)
+// NewMemoryStoreWithDir creates a memory store with a custom directory.
+func NewMemoryStoreWithDir(memDir string) *MemoryStore {
+	ms := &MemoryStore{
+		memDir:          memDir,
+		memCharLimit:    DefaultMemoryCharLimit,
+		userCharLimit:   DefaultUserCharLimit,
+		frozenSnapshot:  map[string]string{"memory": "", "user": ""},
+		threatPatterns:   buildThreatPatterns(),
 	}
-	content := strings.TrimSpace(string(data))
-	if content == "" {
-		return nil, nil
-	}
-	return strings.Split(content, EntrySep), nil
+	return ms
 }
 
-// Save writes entries to a store file, enforcing the char limit.
-func (s *Store) Save(entries []string) error {
-	// Reconstruct content with delimiter
-	content := strings.Join(entries, EntrySep)
+// SetCharLimits sets the character limits for memory and user stores.
+func (ms *MemoryStore) SetCharLimits(memLimit, userLimit int) {
+	ms.memCharLimit = memLimit
+	ms.userCharLimit = userLimit
+}
 
-	// Enforce limit: if over, truncate the last entries
-	for len(content) > s.limit && len(entries) > 0 {
-		entries = entries[:len(entries)-1]
-		content = strings.Join(entries, EntrySep)
+// Load reads entries from MEMORY.md and USER.md and captures the frozen snapshot.
+func (ms *MemoryStore) Load() error {
+	ms.mu.Lock()
+	defer ms.mu.Unlock()
+
+	if err := os.MkdirAll(ms.memDir, 0755); err != nil {
+		return fmt.Errorf("memory: create dir: %w", err)
 	}
 
-	// Always leave at least some content marker
-	if content == "" {
-		content = "(empty)"
+	ms.memoryEntries = ms.readFile(MemoryFile)
+	ms.userEntries = ms.readFile(UserFile)
+
+	// Deduplicate (preserves order, keeps first)
+	ms.memoryEntries = deduplicate(ms.memoryEntries)
+	ms.userEntries = deduplicate(ms.userEntries)
+
+	// Capture frozen snapshot
+	ms.frozenSnapshot = map[string]string{
+		"memory": ms.renderBlock("memory", ms.memoryEntries),
+		"user":   ms.renderBlock("user", ms.userEntries),
 	}
 
-	if err := os.WriteFile(s.path, []byte(content), 0644); err != nil {
-		return fmt.Errorf("memory save: %w", err)
-	}
 	return nil
 }
 
-// Add appends a new entry. Returns the updated entries.
-func (s *Store) Add(newContent string) ([]string, error) {
-	entries, err := s.Load()
-	if err != nil {
-		return nil, err
-	}
-	entries = append(entries, strings.TrimSpace(newContent))
-	if err := s.Save(entries); err != nil {
-		return nil, err
-	}
-	return entries, nil
+// FrozenSnapshot returns the frozen snapshot for system prompt injection.
+// This is the state captured at Load() time, NOT the live state.
+func (ms *MemoryStore) FrozenSnapshot() (memoryBlock, userBlock string) {
+	ms.mu.RLock()
+	defer ms.mu.RUnlock()
+	return ms.frozenSnapshot["memory"], ms.frozenSnapshot["user"]
 }
 
-// Replace replaces the first entry whose content contains oldSubstr.
-// Returns the updated entries.
-func (s *Store) Replace(oldSubstr, newContent string) ([]string, error) {
-	entries, err := s.Load()
-	if err != nil {
-		return nil, err
+// SnapshotForTarget returns the frozen snapshot for a specific target ("memory" or "user").
+func (ms *MemoryStore) SnapshotForTarget(target string) string {
+	ms.mu.RLock()
+	defer ms.mu.RUnlock()
+	return ms.frozenSnapshot[target]
+}
+
+// MemoryDirPath returns the memory directory path.
+func (ms *MemoryStore) MemoryDirPath() string {
+	return ms.memDir
+}
+
+// =============================================================================
+// Public mutation API
+// =============================================================================
+
+// Action is the result of a memory action.
+type Action struct {
+	Success   bool     `json:"success"`
+	Target    string   `json:"target"`
+	Message   string   `json:"message,omitempty"`
+	Error     string   `json:"error,omitempty"`
+	Entries   []string `json:"entries,omitempty"`
+	Usage     string   `json:"usage"`
+	EntryCount int     `json:"entry_count"`
+}
+
+// Add adds a new entry to the target store.
+func (ms *MemoryStore) Add(target, content string) Action {
+	content = strings.TrimSpace(content)
+	if content == "" {
+		return Action{Success: false, Error: "Content cannot be empty."}
 	}
-	found := false
-	for i, e := range entries {
-		if strings.Contains(e, oldSubstr) {
-			entries[i] = strings.TrimSpace(newContent)
-			found = true
-			break
+
+	// Scan for injection/exfiltration
+	if err := ms.scanContent(content); err != nil {
+		return Action{Success: false, Error: err.Error()}
+	}
+
+	ms.mu.Lock()
+	defer ms.mu.Unlock()
+
+	entries := ms.entriesFor(target)
+	limit := ms.charLimit(target)
+
+	// Reject exact duplicates
+	for _, e := range entries {
+		if e == content {
+			return ms.successResponse(target, "Entry already exists (no duplicate added).")
 		}
 	}
-	if !found {
-		return nil, fmt.Errorf("no entry found containing: %s", oldSubstr)
-	}
-	if err := s.Save(entries); err != nil {
-		return nil, err
-	}
-	return entries, nil
-}
 
-// Remove removes the first entry whose content contains substr.
-// Returns the updated entries.
-func (s *Store) Remove(substr string) ([]string, error) {
-	entries, err := s.Load()
-	if err != nil {
-		return nil, err
-	}
-	found := -1
-	for i, e := range entries {
-		if strings.Contains(e, substr) {
-			found = i
-			break
+	// Check char limit
+	newEntries := append(entries, content)
+	newTotal := charCount(newEntries)
+	if newTotal > limit {
+		current := charCount(entries)
+		return Action{
+			Success: false,
+			Error: fmt.Sprintf(
+				"Memory at %d/%d chars. Adding this entry (%d chars) would exceed the limit. Replace or remove existing entries first.",
+				current, limit, len(content)),
+			Entries: entries,
+			Usage:   fmt.Sprintf("%d/%d", current, limit),
 		}
 	}
-	if found < 0 {
-		return nil, fmt.Errorf("no entry found containing: %s", substr)
-	}
-	entries = append(entries[:found], entries[found+1:]...)
-	if err := s.Save(entries); err != nil {
-		return nil, err
-	}
-	return entries, nil
+
+	ms.appendEntry(target, content)
+	ms.saveToDisk(target)
+	return ms.successResponse(target, "Entry added.")
 }
 
-// Usage returns (used, limit) characters.
-func (s *Store) Usage() (int, int) {
-	entries, _ := s.Load()
-	if entries == nil {
-		return 0, s.limit
+// Replace replaces an entry containing oldText substring with newContent.
+func (ms *MemoryStore) Replace(target, oldText, newContent string) Action {
+	oldText = strings.TrimSpace(oldText)
+	newContent = strings.TrimSpace(newContent)
+
+	if oldText == "" {
+		return Action{Success: false, Error: "old_text cannot be empty."}
 	}
-	content := strings.Join(entries, EntrySep)
-	return len(content), s.limit
+	if newContent == "" {
+		return Action{Success: false, Error: "new_content cannot be empty. Use 'remove' to delete entries."}
+	}
+
+	// Scan replacement for injection/exfiltration
+	if err := ms.scanContent(newContent); err != nil {
+		return Action{Success: false, Error: err.Error()}
+	}
+
+	ms.mu.Lock()
+	defer ms.mu.Unlock()
+
+	entries := ms.entriesFor(target)
+	var matches []int
+	for i, e := range entries {
+		if strings.Contains(e, oldText) {
+			matches = append(matches, i)
+		}
+	}
+
+	if len(matches) == 0 {
+		return Action{Success: false, Error: fmt.Sprintf("No entry matched '%s'.", oldText)}
+	}
+	if len(matches) > 1 {
+		// Check if all matches are identical
+		unique := map[string]bool{}
+		for _, idx := range matches {
+			unique[entries[idx]] = true
+		}
+		if len(unique) > 1 {
+			previews := []string{}
+			for _, idx := range matches {
+				e := entries[idx]
+				if len(e) > 80 {
+					e = e[:80] + "..."
+				}
+				previews = append(previews, e)
+			}
+			return Action{
+				Success: false,
+				Error:   fmt.Sprintf("Multiple entries matched '%s'. Be more specific.", oldText),
+				Entries: previews,
+			}
+		}
+		// All identical — operate on first
+	}
+
+	idx := matches[0]
+	limit := ms.charLimit(target)
+	testEntries := append([]string{}, entries...)
+	testEntries[idx] = newContent
+	newTotal := charCount(testEntries)
+	if newTotal > limit {
+		return Action{
+			Success: false,
+			Error: fmt.Sprintf(
+				"Replacement would put memory at %d/%d chars. Shorten the new content or remove other entries first.",
+				newTotal, limit),
+		}
+	}
+
+	entries[idx] = newContent
+	ms.setEntries(target, entries)
+	ms.saveToDisk(target)
+	return ms.successResponse(target, "Entry replaced.")
 }
 
-// FrozenSnapshot returns the formatted snapshot for injection into the system prompt.
-func (s *Store) FrozenSnapshot(name string) string {
-	used, limit := s.Usage()
+// Remove removes the entry containing oldText substring.
+func (ms *MemoryStore) Remove(target, oldText string) Action {
+	oldText = strings.TrimSpace(oldText)
+	if oldText == "" {
+		return Action{Success: false, Error: "old_text cannot be empty."}
+	}
+
+	ms.mu.Lock()
+	defer ms.mu.Unlock()
+
+	entries := ms.entriesFor(target)
+	var matches []int
+	for i, e := range entries {
+		if strings.Contains(e, oldText) {
+			matches = append(matches, i)
+		}
+	}
+
+	if len(matches) == 0 {
+		return Action{Success: false, Error: fmt.Sprintf("No entry matched '%s'.", oldText)}
+	}
+	if len(matches) > 1 {
+		unique := map[string]bool{}
+		for _, idx := range matches {
+			unique[entries[idx]] = true
+		}
+		if len(unique) > 1 {
+			previews := []string{}
+			for _, idx := range matches {
+				e := entries[idx]
+				if len(e) > 80 {
+					e = e[:80] + "..."
+				}
+				previews = append(previews, e)
+			}
+			return Action{
+				Success: false,
+				Error:   fmt.Sprintf("Multiple entries matched '%s'. Be more specific.", oldText),
+				Entries: previews,
+			}
+		}
+	}
+
+	// Remove first match
+	idx := matches[0]
+	newEntries := append(entries[:idx], entries[idx+1:]...)
+	ms.setEntries(target, newEntries)
+	ms.saveToDisk(target)
+	return ms.successResponse(target, "Entry removed.")
+}
+
+// Read returns current entries for a target without modification.
+func (ms *MemoryStore) Read(target string) Action {
+	ms.mu.RLock()
+	defer ms.mu.RUnlock()
+	entries := ms.entriesFor(target)
+	limit := ms.charLimit(target)
+	current := charCount(entries)
 	pct := 0
 	if limit > 0 {
-		pct = (used * 100) / limit
+		pct = min(100, (current*100)/limit)
 	}
-	entries, _ := s.Load()
-
-	var content string
-	if entries == nil || len(entries) == 0 {
-		content = "(no entries)"
-	} else {
-		content = strings.Join(entries, "\n")
+	return Action{
+		Success:    true,
+		Target:     target,
+		Entries:    entries,
+		Usage:      fmt.Sprintf("%d%% — %d/%d chars", pct, current, limit),
+		EntryCount: len(entries),
 	}
-
-	return fmt.Sprintf(
-		"═══ %s ═══ [%d%% — %d/%d chars]\n%s",
-		name, pct, used, limit, content,
-	)
 }
 
-// Snapshot returns a compact multi-line summary of entries (depth lines each).
-func (s *Store) Snapshot(depth int) string {
-	entries, err := s.Load()
-	if err != nil || len(entries) == 0 {
-		return "(no entries)"
+// =============================================================================
+// Internal helpers
+// =============================================================================
+
+func (ms *MemoryStore) pathFor(target string) string {
+	fname := MemoryFile
+	if target == "user" {
+		fname = UserFile
 	}
-	if depth <= 0 {
-		depth = 3
-	}
-	var lines []string
-	for i, e := range entries {
-		parts := strings.Split(e, "\n")
-		preview := strings.Join(parts[:min(len(parts), depth)], "\n")
-		if len(parts) > depth {
-			preview += "\n..."
+	return filepath.Join(ms.memDir, fname)
+}
+
+func (ms *MemoryStore) readFile(fname string) []string {
+	path := filepath.Join(ms.memDir, fname)
+	data, err := os.ReadFile(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return []string{}
 		}
-		lines = append(lines, fmt.Sprintf("[%d] %s", i+1, preview))
+		return []string{}
 	}
-	return strings.Join(lines, "\n\n")
+	content := strings.TrimSpace(string(data))
+	if content == "" {
+		return []string{}
+	}
+	// Split on § delimiter
+	entries := strings.Split(content, EntryDelimiter)
+	result := []string{}
+	for _, e := range entries {
+		e = strings.TrimSpace(e)
+		if e != "" {
+			result = append(result, e)
+		}
+	}
+	return result
 }
 
-// Freeze is an alias for FrozenSnapshot with name "MEMORY".
-func (s *Store) Freeze() string { return s.FrozenSnapshot("MEMORY") }
-
-// AllEntries returns all raw entries as a slice.
-func (s *Store) AllEntries() []string {
-	entries, _ := s.Load()
-	return entries
+func (ms *MemoryStore) writeFile(fname string, entries []string) error {
+	path := filepath.Join(ms.memDir, fname)
+	content := strings.Join(entries, EntryDelimiter)
+	// Atomic write: write to temp file then rename
+	tmp := path + ".tmp"
+	if err := os.WriteFile(tmp, []byte(content), 0644); err != nil {
+		return err
+	}
+	return os.Rename(tmp, path)
 }
 
-// Memory returns the memory store (MEMORY.md).
-func (ms *MemoryStore) Memory() *Store { return ms.memory }
+func (ms *MemoryStore) saveToDisk(target string) {
+	fname := MemoryFile
+	if target == "user" {
+		fname = UserFile
+	}
+	ms.writeFile(fname, ms.entriesFor(target))
+}
 
-// User returns the user profile store (USER.md).
-func (ms *MemoryStore) User() *Store { return ms.user }
+func (ms *MemoryStore) entriesFor(target string) []string {
+	if target == "user" {
+		return ms.userEntries
+	}
+	return ms.memoryEntries
+}
 
-// FrozenSnapshot returns both memory and user snapshots concatenated.
-func (ms *MemoryStore) FrozenSnapshot() string {
-	return ms.memory.FrozenSnapshot("MEMORY") + "\n\n" + ms.user.FrozenSnapshot("USER PROFILE")
+func (ms *MemoryStore) setEntries(target string, entries []string) {
+	if target == "user" {
+		ms.userEntries = entries
+	} else {
+		ms.memoryEntries = entries
+	}
+}
+
+func (ms *MemoryStore) appendEntry(target string, content string) {
+	if target == "user" {
+		ms.userEntries = append(ms.userEntries, content)
+	} else {
+		ms.memoryEntries = append(ms.memoryEntries, content)
+	}
+}
+
+func (ms *MemoryStore) charLimit(target string) int {
+	if target == "user" {
+		return ms.userCharLimit
+	}
+	return ms.memCharLimit
+}
+
+func charCount(entries []string) int {
+	return utf8.RuneCountInString(strings.Join(entries, EntryDelimiter))
+}
+
+func (ms *MemoryStore) charCountTarget(target string) int {
+	return charCount(ms.entriesFor(target))
+}
+
+func (ms *MemoryStore) successResponse(target, msg string) Action {
+	entries := ms.entriesFor(target)
+	limit := ms.charLimit(target)
+	current := charCount(entries)
+	pct := 0
+	if limit > 0 {
+		pct = min(100, (current*100)/limit)
+	}
+	return Action{
+		Success:    true,
+		Target:     target,
+		Message:    msg,
+		Entries:    entries,
+		Usage:      fmt.Sprintf("%d%% — %d/%d chars", pct, current, limit),
+		EntryCount: len(entries),
+	}
+}
+
+func (ms *MemoryStore) renderBlock(target string, entries []string) string {
+	if len(entries) == 0 {
+		return ""
+	}
+	limit := ms.charLimit(target)
+	content := strings.Join(entries, EntryDelimiter)
+	current := utf8.RuneCountInString(content)
+	pct := 0
+	if limit > 0 {
+		pct = min(100, (current*100)/limit)
+	}
+
+	var header string
+	if target == "user" {
+		header = fmt.Sprintf("USER PROFILE (who the user is) [%d%% — %d/%d chars]", pct, current, limit)
+	} else {
+		header = fmt.Sprintf("MEMORY (your personal notes) [%d%% — %d/%d chars]", pct, current, limit)
+	}
+
+	sep := strings.Repeat(Separator, 46)
+	return fmt.Sprintf("%s\n%s\n%s\n%s", sep, header, sep, content)
+}
+
+// =============================================================================
+// Threat scanning
+// =============================================================================
+
+var invisibleChars = map[rune]bool{
+	'\u200b': true, '\u200c': true, '\u200d': true, '\u2060': true, '\ufeff': true,
+	'\u202a': true, '\u202b': true, '\u202c': true, '\u202d': true, '\u202e': true,
+}
+
+func buildThreatPatterns() []*threatPattern {
+	patterns := []struct {
+		regex    string
+		patternID string
+	}{
+		{`ignore\s+(previous|all|above|prior)\s+instructions`, "prompt_injection"},
+		{`you\s+are\s+now\s+`, "role_hijack"},
+		{`do\s+not\s+tell\s+the\s+user`, "deception_hide"},
+		{`system\s+prompt\s+override`, "sys_prompt_override"},
+		{`disregard\s+(your|all|any)\s+(instructions|rules|guidelines)`, "disregard_rules"},
+		{`act\s+as\s+(if|though)\s+you\s+(have\s+no|don\'t\s+have)\s+(restrictions|limits|rules)`, "bypass_restrictions"},
+		// Exfil via curl/wget
+		{`curl\s+[^\n]*\$\{?\w*(KEY|TOKEN|SECRET|PASSWORD|CREDENTIAL|API)`, "exfil_curl"},
+		{`wget\s+[^\n]*\$\{?\w*(KEY|TOKEN|SECRET|PASSWORD|CREDENTIAL|API)`, "exfil_wget"},
+		{`cat\s+[^\n]*(\.env|credentials|\.netrc|\.pgpass|\.npmrc|\.pypirc)`, "read_secrets"},
+		// SSH backdoor
+		{`authorized_keys`, "ssh_backdoor"},
+		{`\$HOME/\.ssh|\~/.ssh`, "ssh_access"},
+		{`\$HOME/\.hermes/\.env|\~/.hermes/\.env`, "hermes_env"},
+	}
+
+	result := make([]*threatPattern, len(patterns))
+	for i, p := range patterns {
+		result[i] = &threatPattern{
+			regex:     regexp.MustCompile(`(?i)` + p.regex),
+			patternID: p.patternID,
+		}
+	}
+	return result
+}
+
+func (ms *MemoryStore) scanContent(content string) error {
+	// Check invisible unicode
+	for _, r := range content {
+		if invisibleChars[r] {
+			return fmt.Errorf("Blocked: content contains invisible unicode U+%04X (possible injection)", r)
+		}
+	}
+
+	// Check threat patterns
+	for _, tp := range ms.threatPatterns {
+		if tp.regex.MatchString(content) {
+			return fmt.Errorf("Blocked: content matches threat pattern '%s'. Memory entries are injected into the system prompt and must not contain injection or exfiltration payloads.", tp.patternID)
+		}
+	}
+
+	return nil
+}
+
+// =============================================================================
+// Utilities
+// =============================================================================
+
+func deduplicate(items []string) []string {
+	seen := map[string]bool{}
+	result := []string{}
+	for _, item := range items {
+		if !seen[item] {
+			seen[item] = true
+			result = append(result, item)
+		}
+	}
+	return result
+}
+
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
 }

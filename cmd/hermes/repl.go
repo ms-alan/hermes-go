@@ -67,12 +67,11 @@ func newREPL(agentCfg agent.Config, store *session.Store, logger *slog.Logger, m
 	ctxMgr := hermescontext.NewManager(ctxCfg, logger, modelClient)
 
 	// Create memory store
-	memStore, err := hermesmemory.NewMemoryStore()
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Warning: failed to create memory store: %v\n", err)
-	} else {
-		tools.SetMemoryStore(memStore)
+	memStore := hermesmemory.NewMemoryStore()
+	if err := memStore.Load(); err != nil {
+		fmt.Fprintf(os.Stderr, "Warning: failed to load memory store: %v\n", err)
 	}
+	hermesmemory.SetMemoryStore(memStore)
 
 	// Create context file loader
 	ctxLoader := hermescontext.NewLoader("", "")
@@ -256,7 +255,13 @@ func buildSystemPrompt(ctxLoader *hermescontext.Loader, memStore *hermesmemory.M
 
 	// Memory snapshot
 	if memStore != nil {
-		parts = append(parts, memStore.FrozenSnapshot())
+		memBlock, userBlock := memStore.FrozenSnapshot()
+		if memBlock != "" {
+			parts = append(parts, memBlock)
+		}
+		if userBlock != "" {
+			parts = append(parts, userBlock)
+		}
 	}
 
 	// Project context

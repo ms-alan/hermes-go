@@ -5,8 +5,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"strings"
 
 	"github.com/google/uuid"
+	"github.com/nousresearch/hermes-go/pkg/memory"
 	"github.com/nousresearch/hermes-go/pkg/model"
 	"github.com/nousresearch/hermes-go/pkg/session"
 	ctxmgr "github.com/nousresearch/hermes-go/pkg/context"
@@ -58,11 +60,8 @@ func (sa *SessionAgent) Chat(ctx context.Context, userMsg string) (string, error
 		sa.logger.Info("context was compressed before LLM call")
 	}
 
-	// Run the agent with the prepared messages
-	systemPrompt := ""
-	if sa.sessInfo != nil && sa.sessInfo.SystemPrompt != nil {
-		systemPrompt = *sa.sessInfo.SystemPrompt
-	}
+	// Build system prompt: stored prompt + memory snapshot
+	systemPrompt := sa.buildSystemPrompt()
 	result := sa.agent.RunWithMessages(ctx, msgsForLLM, systemPrompt)
 	if result.Error != nil {
 		return "", result.Error
@@ -82,6 +81,29 @@ func (sa *SessionAgent) Chat(ctx context.Context, userMsg string) (string, error
 	}
 
 	return result.FinalResponse, nil
+}
+
+// buildSystemPrompt assembles the system prompt from stored prompt + memory snapshot.
+func (sa *SessionAgent) buildSystemPrompt() string {
+	var parts []string
+
+	// Base system prompt from session store
+	if sa.sessInfo != nil && sa.sessInfo.SystemPrompt != nil && *sa.sessInfo.SystemPrompt != "" {
+		parts = append(parts, *sa.sessInfo.SystemPrompt)
+	}
+
+	// Memory snapshot (frozen at load time)
+	if memStore := memory.GetMemoryStore(); memStore != nil {
+		memBlock, userBlock := memStore.FrozenSnapshot()
+		if memBlock != "" {
+			parts = append(parts, memBlock)
+		}
+		if userBlock != "" {
+			parts = append(parts, userBlock)
+		}
+	}
+
+	return strings.Join(parts, "\n\n")
 }
 
 // New creates a new session and sets it as the current active session.

@@ -307,23 +307,6 @@ var terminalSchema = map[string]any{
 		"required": []any{"command"},
 	},
 }
-
-var memorySchema = map[string]any{
-	"name":        "memory",
-	"description": "Manage agent persistent memory (MEMORY.md and USER.md). Actions: add, replace, remove, snapshot, freeze, show.",
-	"parameters": map[string]any{
-		"type": "object",
-		"properties": map[string]any{
-			"action": map[string]any{"type": "string", "enum": []any{"add", "replace", "remove", "snapshot", "freeze", "show"}},
-			"target": map[string]any{"type": "string", "enum": []any{"memory", "user"}, "default": "memory"},
-			"content":   map[string]any{"type": "string", "description": "Content for add/replace"},
-			"old_text":  map[string]any{"type": "string", "description": "Exact substring to replace or remove"},
-			"depth":     map[string]any{"type": "number", "description": "Snapshot depth (1-3, default 1)"},
-		},
-		"required": []any{"action"},
-	},
-}
-
 var cronSchema = map[string]any{
 	"name":        "cronjob",
 	"description": "Manage scheduled cron jobs — create, list, get, remove, pause, resume, or run a job immediately.",
@@ -834,7 +817,7 @@ func init() {
 		"memory",
 		"builtin",
 		memorySchema,
-		memoryToolHandler,
+		memoryHandler,
 		nil,
 		nil,
 		false,
