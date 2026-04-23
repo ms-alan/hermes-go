@@ -6,9 +6,10 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"os/signal"
 
-	"github.com/nousresearch/hermes-go/pkg/config"
 	"github.com/nousresearch/hermes-go/pkg/agent"
+	"github.com/nousresearch/hermes-go/pkg/config"
 	"github.com/nousresearch/hermes-go/pkg/model"
 	"github.com/nousresearch/hermes-go/pkg/session"
 )
@@ -99,6 +100,10 @@ func main() {
 		"base_url", baseURL,
 	)
 
+	// Set up graceful shutdown: cancel the context on SIGINT or SIGTERM.
+	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, os.Kill)
+	defer cancel()
+
 	// Run the REPL.
 	repl := newREPL(agentConfig, store, logger, modelClient, modelName)
 	if sessionID != "" {
@@ -108,10 +113,11 @@ func main() {
 			logger.Info("resumed session", "session_id", sessionID)
 		}
 	}
-	if err := repl.Run(context.Background()); err != nil {
+	if err := repl.Run(ctx); err != nil {
 		logger.Error("REPL error", "error", err)
 		os.Exit(1)
 	}
+	logger.Info("hermes stopped gracefully")
 }
 
 // slogLogger wraps *slog.Logger to satisfy the agent.Logger interface.

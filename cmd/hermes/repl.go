@@ -58,7 +58,8 @@ func newREPL(agentCfg agent.Config, store *session.Store, logger *slog.Logger, m
 	}
 }
 
-// Run starts the REPL and runs it until the user types /exit or an error occurs.
+// Run starts the REPL and runs it until the user types /exit,
+// the context is cancelled (e.g. Ctrl+C), or an error occurs.
 func (r *repl) Run(ctx context.Context) error {
 	fmt.Println("Hermes REPL v0.1.0")
 	fmt.Println("Type /help for available commands. Use Ctrl+C or /exit to quit.")
@@ -71,8 +72,24 @@ func (r *repl) Run(ctx context.Context) error {
 	}
 	r.logger.Info("session started", "session_id", r.sessionAgent.SessionID())
 
+	// Goroutine: when ctx is cancelled, close stdin to unblock the scanner.
+	// This lets us respond to Ctrl+C gracefully instead of getting killed.
+	go func() {
+		<-ctx.Done()
+		// Context cancelled — close stdin to break scanner.Scan().
+		// The next Scan() call will return false with io.EOF.
+		_ = os.Stdin.Close()
+	}()
+
 	scanner := bufio.NewScanner(os.Stdin)
 	for {
+		select {
+		case <-ctx.Done():
+			r.logger.Info("shutdown requested, exiting REPL")
+			return nil
+		default:
+		}
+
 		fmt.Print("> ")
 		if !scanner.Scan() {
 			if err := scanner.Err(); err != nil {
