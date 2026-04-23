@@ -134,6 +134,7 @@ func main() {
 	// Platform adapters
 	var adapters []gateway.PlatformAdapter
 	var qqAdapter *qqbot.Adapter
+	var httpServer *httpServer // nil unless -gateway flag is set
 
 	if containsStr(*platformsFlag, "qq") {
 		qqCfg := qqbot.DefaultConfig()
@@ -154,6 +155,44 @@ func main() {
 			}
 		} else {
 			logger.Warn("QQ not configured (set QQ_APP_ID and QQ_CLIENT_SECRET)")
+		}
+	}
+
+	// Telegram adapter
+	if containsStr(*platformsFlag, "telegram") {
+		telegramCfg := gateway.TelegramConfig{
+			BotToken: os.Getenv("TELEGRAM_BOT_TOKEN"),
+		}
+		telegramAdapter := gateway.NewTelegramAdapter(telegramCfg, logger)
+		if err := telegramAdapter.Connect(ctx); err != nil {
+			logger.Warn("Telegram adapter error", "error", err)
+		} else {
+			adapters = append(adapters, telegramAdapter)
+			logger.Info("Telegram adapter connected")
+			if httpServer != nil {
+				httpServer.RegisterTelegramAdapter(telegramAdapter)
+				logger.Info("Telegram webhook endpoint: POST /telegram/webhook")
+			}
+		}
+	}
+
+	// Discord adapter
+	if containsStr(*platformsFlag, "discord") {
+		discordCfg := gateway.DiscordConfig{
+			BotToken:      os.Getenv("DISCORD_BOT_TOKEN"),
+			ApplicationID: os.Getenv("DISCORD_APPLICATION_ID"),
+			WebhookURL:    os.Getenv("DISCORD_WEBHOOK_URL"),
+		}
+		discordAdapter := gateway.NewDiscordAdapter(discordCfg, logger)
+		if err := discordAdapter.Connect(ctx); err != nil {
+			logger.Warn("Discord adapter error", "error", err)
+		} else {
+			adapters = append(adapters, discordAdapter)
+			logger.Info("Discord adapter connected")
+			if httpServer != nil {
+				httpServer.RegisterDiscordAdapter(discordAdapter)
+				logger.Info("Discord webhook endpoint: POST /discord/webhook")
+			}
 		}
 	}
 
@@ -191,10 +230,9 @@ func main() {
 	}
 
 	// HTTP API server (optional)
-	var httpServer *http.Server
 	if *gatewayAddr != "" {
 		srv := newHTTPServer(sessAgent, logger)
-		httpServer = srv.Server
+		httpServer = srv
 		srv.Addr = *gatewayAddr
 		go func() {
 			if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
