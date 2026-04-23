@@ -304,6 +304,27 @@ var webSearchSchema = map[string]any{
 	},
 }
 
+var webExtractSchema = map[string]any{
+	"name":        "web_extract",
+	"description": "Extract clean text content from web pages. Fetches each URL, strips HTML markup, and returns readable text with title. Supports proxy via HTTP_PROXY/HTTPS_PROXY env vars. Content is truncated at 8000 characters to save tokens.",
+	"parameters": map[string]any{
+		"type": "object",
+		"properties": map[string]any{
+			"urls": map[string]any{
+				"type":        "array",
+				"items":       map[string]any{"type": "string"},
+				"description": "List of URLs to extract content from (http/https only)",
+			},
+			"format": map[string]any{
+				"type":        "string",
+				"description": "Output format: 'text' (default) or 'markdown'",
+				"default":     "text",
+			},
+		},
+		"required": []any{"urls"},
+	},
+}
+
 // ---------------------------------------------------------------------------
 // Blocked / sensitive paths
 // ---------------------------------------------------------------------------
@@ -863,6 +884,18 @@ func init() {
 		false,
 		"Search the web using Tavily API (requires TAVILY_API_KEY)",
 		"🔍",
+	)
+
+	Register(
+		"web_extract",
+		"builtin",
+		webExtractSchema,
+		webExtractHandler,
+		nil,
+		nil,
+		false,
+		"Extract clean text from web pages — strips HTML, returns readable content",
+		"📄",
 	)
 
 	Register(
