@@ -1017,6 +1017,42 @@ func init() {
 		"Press a keyboard key (Enter, Tab, Escape, ArrowUp, etc.)",
 		"⌨️",
 	)
+
+	Register(
+		"vision_analyze",
+		"builtin",
+		visionSchema,
+		visionAnalyzeHandler,
+		nil,
+		nil,
+		false,
+		"Analyze images with AI vision — local file, URL, or screenshot",
+		"👁️",
+	)
+
+	Register(
+		"image_generate",
+		"builtin",
+		imageGenerateSchema,
+		imageGenerateHandler,
+		nil,
+		nil,
+		false,
+		"Generate images from text prompts via MiniMax image API",
+		"🎨",
+	)
+
+	Register(
+		"text_to_speech",
+		"builtin",
+		textToSpeechSchema,
+		textToSpeechHandler,
+		nil,
+		nil,
+		false,
+		"Convert text to speech audio via MiniMax TTS API",
+		"🔊",
+	)
 }
 
 // ---------------------------------------------------------------------------
