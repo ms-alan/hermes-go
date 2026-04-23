@@ -29,9 +29,9 @@ type Config struct {
 // ModelConfig holds LLM model settings
 type ModelConfig struct {
 	Provider       string                 `json:"provider" yaml:"provider"`
-	ModelName      string                 `json:"model_name" yaml:"model_name"`
+	ModelName      string                 `json:"default" yaml:"default"`
 	APIKey         string                 `json:"api_key" yaml:"api_key"`
-	APIBase        string                 `json:"api_base" yaml:"api_base"`
+	APIBase        string                 `json:"base_url" yaml:"base_url"`
 	Temperature    float64                `json:"temperature" yaml:"temperature"`
 	MaxTokens      int                    `json:"max_tokens" yaml:"max_tokens"`
 	TopP           float64                `json:"top_p" yaml:"top_p"`

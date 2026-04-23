@@ -31,11 +31,11 @@ func main() {
 	}
 
 	// Determine effective values: CLI flags override config defaults.
-	model := *modelFlag
-	if model == "" {
-		model = cfg.Model.ModelName
-		if model == "" {
-			model = "gpt-4o"
+	modelName := *modelFlag
+	if modelName == "" {
+		modelName = cfg.Model.ModelName
+		if modelName == "" {
+			modelName = "gpt-4o"
 		}
 	}
 	baseURL := *baseURLFlag
@@ -58,7 +58,7 @@ func main() {
 
 	// Build agent config.
 	agentConfig := agent.Config{
-		Model:         model,
+		Model:         modelName,
 		APIKey:        apiKey,
 		BaseURL:       baseURL,
 		MaxIterations: 90,
@@ -75,7 +75,7 @@ func main() {
 
 	// Create LLM client. The placeholder uses the baseURL to select a backend.
 	// For a real implementation, this would be an actual LLM client (e.g., OpenAI, Anthropic).
-	modelClient, err := newLLMClient(baseURL, apiKey, logger)
+	modelClient, err := newLLMClient(baseURL, apiKey, modelName, logger)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error creating LLM client: %v\n", err)
 		os.Exit(1)
@@ -83,12 +83,12 @@ func main() {
 	defer modelClient.Close()
 
 	logger.Info("hermes started",
-		"model", model,
+		"model", modelName,
 		"base_url", baseURL,
 	)
 
 	// Run the REPL.
-	repl := newREPL(agentConfig, store, logger, modelClient, model)
+	repl := newREPL(agentConfig, store, logger, modelClient, modelName)
 	if sessionID != "" {
 		if err := repl.sessionAgent.Switch(sessionID); err != nil {
 			logger.Warn("failed to resume session", "session_id", sessionID, "error", err)
@@ -113,13 +113,14 @@ func (s *slogLogger) Warn(msg string, args ...any)  { s.log.Warn(msg, args...) }
 func (s *slogLogger) Error(msg string, args ...any) { s.log.Error(msg, args...) }
 
 // newLLMClient creates an LLM client based on the base URL.
-func newLLMClient(baseURL, apiKey string, logger *slog.Logger) (model.LLMClient, error) {
+func newLLMClient(baseURL, apiKey, modelName string, logger *slog.Logger) (model.LLMClient, error) {
 	if baseURL == "" {
 		return nil, fmt.Errorf("base-url is required")
 	}
 	opts := []model.Option{
 		model.WithBaseURL(baseURL),
 		model.WithAPIKey(apiKey),
+		model.WithModel(modelName),
 	}
 	return model.NewOpenAIClient(opts...)
 }
