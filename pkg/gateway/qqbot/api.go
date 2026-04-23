@@ -44,7 +44,7 @@ func (c *APIClient) fetchToken(ctx context.Context, appSecret string) error {
 	url := "https://login.q.qq.com/getToken?grant_type=client_credentials&client_id=" + c.AppID + "&client_secret=" + appSecret
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
-		return err
+		return fmt.Errorf("create token request: %w", err)
 	}
 	resp, err := c.HTTP.Do(req)
 	if err != nil {

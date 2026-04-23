@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"strings"
 	"sync"
 	"time"
 
@@ -359,40 +360,8 @@ func isLockedErr(err error) bool {
 		return false
 	}
 	msg := err.Error()
-	return containsFold(msg, "locked") || containsFold(msg, "busy")
-}
-
-func containsFold(s, substr string) bool {
-	return len(s) >= len(substr) && (s == substr || containsFoldInner(s, substr))
-}
-
-func containsFoldInner(s, substr string) bool {
-	for i := 0; i <= len(s)-len(substr); i++ {
-		if equalFold(s[i:i+len(substr)], substr) {
-			return true
-		}
-	}
-	return false
-}
-
-func equalFold(a, b string) bool {
-	if len(a) != len(b) {
-		return false
-	}
-	for i := 0; i < len(a); i++ {
-		ca, cb := a[i], b[i]
-		if ca == cb {
-			continue
-		}
-		if ca >= 'A' && ca <= 'Z' && ca+'a'-'A' == cb {
-			continue
-		}
-		if cb >= 'A' && cb <= 'Z' && cb+'a'-'A' == ca {
-			continue
-		}
-		return false
-	}
-	return true
+	return strings.EqualFold(msg, "locked") || strings.EqualFold(msg, "busy") ||
+		strings.Contains(strings.ToLower(msg), "locked") || strings.Contains(strings.ToLower(msg), "busy")
 }
 
 func randomJitter() time.Duration {
