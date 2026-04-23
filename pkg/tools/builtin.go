@@ -195,6 +195,59 @@ var browserPressSchema = map[string]any{
 	},
 }
 
+var browserNewTabSchema = map[string]any{
+	"name":        "browser_new_tab",
+	"description": "Create a new browser tab and optionally navigate to a URL.",
+	"parameters": map[string]any{
+		"type": "object",
+		"properties": map[string]any{
+			"url": map[string]any{
+				"type":        "string",
+				"description": "Optional URL to open in the new tab",
+			},
+		},
+	},
+}
+
+var browserSwitchTabSchema = map[string]any{
+	"name":        "browser_switch_tab",
+	"description": "Switch to a specific browser tab by ID. Use browser_list_tabs first.",
+	"parameters": map[string]any{
+		"type": "object",
+		"properties": map[string]any{
+			"tab_id": map[string]any{
+				"type":        "string",
+				"description": "The tab ID to switch to",
+			},
+		},
+		"required": []any{"tab_id"},
+	},
+}
+
+var browserCloseTabSchema = map[string]any{
+	"name":        "browser_close_tab",
+	"description": "Close a specific browser tab by ID.",
+	"parameters": map[string]any{
+		"type": "object",
+		"properties": map[string]any{
+			"tab_id": map[string]any{
+				"type":        "string",
+				"description": "The tab ID to close",
+			},
+		},
+		"required": []any{"tab_id"},
+	},
+}
+
+var browserListTabsSchema = map[string]any{
+	"name":        "browser_list_tabs",
+	"description": "List all open browser tabs with their IDs, titles, and URLs.",
+	"parameters": map[string]any{
+		"type": "object",
+		"properties":  map[string]any{},
+	},
+}
+
 var processSchema = map[string]any{
 	"name":        "process",
 	"description": "Manage background processes — list, get, register, unregister.",
@@ -1021,6 +1074,54 @@ func init() {
 		false,
 		"Press a keyboard key (Enter, Tab, Escape, ArrowUp, etc.)",
 		"⌨️",
+	)
+
+	Register(
+		"browser_new_tab",
+		"builtin",
+		browserNewTabSchema,
+		browserNewTabHandler,
+		nil,
+		nil,
+		false,
+		"Create a new browser tab, optionally with a URL",
+		"🆕",
+	)
+
+	Register(
+		"browser_switch_tab",
+		"builtin",
+		browserSwitchTabSchema,
+		browserSwitchTabHandler,
+		nil,
+		nil,
+		false,
+		"Switch to a specific tab by ID",
+		"🔄",
+	)
+
+	Register(
+		"browser_close_tab",
+		"builtin",
+		browserCloseTabSchema,
+		browserCloseTabHandler,
+		nil,
+		nil,
+		false,
+		"Close a specific browser tab by ID",
+		"❌",
+	)
+
+	Register(
+		"browser_list_tabs",
+		"builtin",
+		browserListTabsSchema,
+		browserListTabsHandler,
+		nil,
+		nil,
+		false,
+		"List all open browser tabs with IDs and titles",
+		"📑",
 	)
 
 	Register(

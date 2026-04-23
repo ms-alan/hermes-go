@@ -9,14 +9,91 @@ import (
 
 var browserManager = browser.NewManager(nil)
 
-// browserNavigateHandler navigates to a URL.
+// ---------------------------------------------------------------------------
+// Tab management tools
+// ---------------------------------------------------------------------------
+
+// ---------------------------------------------------------------------------
+// Tab handlers
+// ---------------------------------------------------------------------------
+
+func browserNewTabHandler(args map[string]any) string {
+	url, _ := args["url"].(string)
+	ctx := context.Background()
+	tabID, err := browserManager.NewTab(ctx)
+	if err != nil {
+		return toolError(fmt.Sprintf("new tab failed: %v", err))
+	}
+	if url != "" {
+		if _, err := browserManager.Navigate(ctx, url); err != nil {
+			return toolError(fmt.Sprintf("opened tab %s but navigate to %s failed: %v", tabID, url, err))
+		}
+	}
+	return toolResultData(map[string]any{
+		"tab_id":  tabID,
+		"url":     url,
+		"message": fmt.Sprintf("New tab %s created and active", tabID),
+	})
+}
+
+func browserSwitchTabHandler(args map[string]any) string {
+	tabID, _ := args["tab_id"].(string)
+	if tabID == "" {
+		return toolError("tab_id is required")
+	}
+	if err := browserManager.SwitchTab(tabID); err != nil {
+		return toolError(err.Error())
+	}
+	return toolResultData(map[string]any{
+		"tab_id":  tabID,
+		"message": fmt.Sprintf("Switched to tab %s", tabID),
+	})
+}
+
+func browserCloseTabHandler(args map[string]any) string {
+	tabID, _ := args["tab_id"].(string)
+	if tabID == "" {
+		return toolError("tab_id is required")
+	}
+	if err := browserManager.CloseTab(tabID); err != nil {
+		return toolError(err.Error())
+	}
+	return toolResultData(map[string]any{
+		"tab_id":  tabID,
+		"message": fmt.Sprintf("Closed tab %s", tabID),
+	})
+}
+
+func browserListTabsHandler(args map[string]any) string {
+	tabs := browserManager.ListTabs()
+	active := browserManager.ActiveTab()
+	entries := make([]map[string]any, len(tabs))
+	for i, t := range tabs {
+		entries[i] = map[string]any{
+			"tab_id": t.ID,
+			"title":  t.Title,
+			"url":    t.URL,
+			"active": t.ID == active,
+		}
+	}
+	return toolResultData(map[string]any{
+		"tabs":      entries,
+		"count":     len(tabs),
+		"active_id": active,
+	})
+}
+
+// ---------------------------------------------------------------------------
+// Navigation & content tools
+// ---------------------------------------------------------------------------
+
 func browserNavigateHandler(args map[string]any) string {
 	url, _ := args["url"].(string)
 	if url == "" {
 		return toolError("url is required")
 	}
 	ctx := context.Background()
-	result, err := browser.Navigate(ctx, url)
+	result, err := browserManager.Navigate(ctx, url)
 	if err != nil {
 		return toolError(fmt.Sprintf("navigate failed: %v", err))
 	}
@@ -26,20 +103,18 @@ func browserNavigateHandler(args map[string]any) string {
 	})
 }
 
-// browserSnapshotHandler returns a text snapshot of the current page.
 func browserSnapshotHandler(args map[string]any) string {
 	ctx := context.Background()
-	result, err := browser.Snapshot(ctx)
+	result, err := browserManager.Snapshot(ctx)
 	if err != nil {
 		return toolError(fmt.Sprintf("snapshot failed: %v", err))
 	}
 	return toolResult("snapshot", result)
 }
 
-// browserVisionHandler takes a screenshot and returns the path.
 func browserVisionHandler(args map[string]any) string {
 	ctx := context.Background()
-	path, err := browser.Screenshot(ctx)
+	path, err := browserManager.Screenshot(ctx)
 	if err != nil {
 		return toolError(fmt.Sprintf("screenshot failed: %v", err))
 	}
@@ -51,20 +126,22 @@ func browserVisionHandler(args map[string]any) string {
 	})
 }
 
-// browserClickHandler clicks an element.
+// ---------------------------------------------------------------------------
+// Interaction tools
+// ---------------------------------------------------------------------------
+
 func browserClickHandler(args map[string]any) string {
 	ref, _ := args["ref"].(string)
 	if ref == "" {
 		return toolError("ref is required")
 	}
 	ctx := context.Background()
-	if err := browser.Click(ctx, ref); err != nil {
+	if err := browserManager.Click(ctx, ref); err != nil {
 		return toolError(fmt.Sprintf("click failed: %v", err))
 	}
 	return toolResult("clicked", ref)
 }
 
-// browserTypeHandler types text into an element.
 func browserTypeHandler(args map[string]any) string {
 	ref, _ := args["ref"].(string)
 	text, _ := args["text"].(string)
@@ -75,22 +152,20 @@ func browserTypeHandler(args map[string]any) string {
 		return toolError("text is required")
 	}
 	ctx := context.Background()
-	if err := browser.Type(ctx, ref, text); err != nil {
+	if err := browserManager.Type(ctx, ref, text); err != nil {
 		return toolError(fmt.Sprintf("type failed: %v", err))
 	}
 	return toolResult("typed", fmt.Sprintf("%s → %s", ref, text))
 }
 
-// browserBackHandler navigates back.
 func browserBackHandler(args map[string]any) string {
 	ctx := context.Background()
-	if err := browser.Back(ctx); err != nil {
+	if err := browserManager.Back(ctx); err != nil {
 		return toolError(fmt.Sprintf("back failed: %v", err))
 	}
 	return toolResult("navigated", "back")
 }
 
-// browserScrollHandler scrolls the page.
 func browserScrollHandler(args map[string]any) string {
 	dir, _ := args["direction"].(string)
 	if dir == "" {
@@ -100,33 +175,22 @@ func browserScrollHandler(args map[string]any) string {
 		return toolError("direction must be 'up' or 'down'")
 	}
 	ctx := context.Background()
-	if err := browser.Scroll(ctx, dir); err != nil {
+	if err := browserManager.Scroll(ctx, dir); err != nil {
 		return toolError(fmt.Sprintf("scroll failed: %v", err))
 	}
 	return toolResult("scrolled", dir)
 }
 
-// browserPressHandler presses a keyboard key.
 func browserPressHandler(args map[string]any) string {
 	key, _ := args["key"].(string)
 	if key == "" {
 		return toolError("key is required")
 	}
 	ctx := context.Background()
-	if err := browser.Press(ctx, key); err != nil {
+	if err := browserManager.Press(ctx, key); err != nil {
 		return toolError(fmt.Sprintf("press failed: %v", err))
 	}
 	return toolResult("pressed", key)
-}
-
-// browserConsoleHandler returns browser console output.
-func browserConsoleHandler(args map[string]any) string {
-	return toolResult("console", "Use browser_snapshot to see page content. Console capture requires CDP event subscription.")
-}
-
-// browserGetImagesHandler lists images on the current page.
-func browserGetImagesHandler(args map[string]any) string {
-	return toolResult("images", "Use browser_vision to take a screenshot and analyze images on the page.")
 }
 
 // CloseBrowser closes the browser.
