@@ -243,8 +243,8 @@ func runSingleDelegate(goal, contextStr string, toolsets []string, timeoutSec, t
 
 	// Determine effective depth. Parent is depth 0; child is depth 1.
 	childDepth := 1
-	if childDepth >= maxSpawnDepth {
-		return delegateResult{Error: "max delegation depth reached (1); cannot spawn subagent"}
+	if childDepth > maxSpawnDepth {
+		return delegateResult{Error: "max delegation depth reached; cannot spawn subagent"}
 	}
 
 	// Register active subagent for observability.
