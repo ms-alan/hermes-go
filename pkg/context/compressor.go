@@ -26,6 +26,11 @@ type CompressorConfig struct {
 	MaxSummaryTokens int
 	// MinSummaryTokens is the minimum summary output size.
 	MinSummaryTokens int
+	// MaxLLMSummaryInputTokens limits how many tokens are sent to the summarizer
+	// in a single LLM call. When middle exceeds this, iterative chunked
+	// summarization is used (first chunk from scratch, subsequent chunks
+	// update the running summary).
+	MaxLLMSummaryInputTokens int
 	// CompressionCooldown prevents repeated compressions within this duration.
 	CompressionCooldown time.Duration
 	// QuietMode suppresses logging when true.
@@ -35,14 +40,15 @@ type CompressorConfig struct {
 // DefaultCompressorConfig returns sensible defaults for a 200K context window.
 func DefaultCompressorConfig() CompressorConfig {
 	return CompressorConfig{
-		ThresholdPercent:   0.50,
-		ProtectFirstN:       3,
-		TailTokenBudget:     20_000,
-		SummaryTargetRatio:  0.20,
-		MaxSummaryTokens:     5_000,
-		MinSummaryTokens:     500,
-		CompressionCooldown: 10 * time.Minute,
-		QuietMode:           false,
+		ThresholdPercent:          0.50,
+		ProtectFirstN:              3,
+		TailTokenBudget:            20_000,
+		SummaryTargetRatio:         0.20,
+		MaxSummaryTokens:           5_000,
+		MinSummaryTokens:            500,
+		MaxLLMSummaryInputTokens:  8_000, // prevent summarizer context overflow
+		CompressionCooldown:        10 * time.Minute,
+		QuietMode:                  false,
 	}
 }
 
@@ -126,12 +132,40 @@ func (c *ContextCompressor) Compress(messages []*model.Message, ctx context.Cont
 	// Step 2: build summarizer input.
 	summaryInput := c.buildSummaryInput(prunedMiddle, tail)
 
-	// Step 3: LLM summarization.
-	systemPrompt := buildSummarySystemPrompt(c.previousSummary, c.config.SummaryTargetRatio, c.config.MaxSummaryTokens)
-	summary, err := c.compressor.Summarize(ctx, summaryInput, systemPrompt)
-	if err != nil {
-		c.logger.Error("summarization failed", "error", err)
-		return nil, fmt.Errorf("summarization failed: %w", err)
+	// Step 3: LLM summarization — chunk if middle exceeds MaxLLMSummaryInputTokens
+	// to avoid summarizer context overflow (iterative: first chunk from scratch,
+	// subsequent chunks update the running summary).
+	var summary string
+	var err error
+	middleTokens := EstimateMessagesTokens(prunedMiddle)
+	maxInput := c.config.MaxLLMSummaryInputTokens
+	if maxInput <= 0 {
+		maxInput = 8000 // safe default
+	}
+
+	if middleTokens <= maxInput {
+		// Fast path: middle fits in one LLM call.
+		systemPrompt := buildSummarySystemPrompt(
+			c.previousSummary, c.config.SummaryTargetRatio, c.config.MaxSummaryTokens,
+		)
+		summary, err = c.compressor.Summarize(ctx, summaryInput, systemPrompt)
+		if err != nil {
+			c.logger.Error("summarization failed", "error", err)
+			return nil, fmt.Errorf("summarization failed: %w", err)
+		}
+	} else {
+		// Chunked path: iterative summarization over token-budgeted chunks.
+		if !c.config.QuietMode {
+			c.logger.Info("chunked summarization triggered",
+				"middle_tokens", middleTokens,
+				"max_per_chunk", maxInput,
+				"chunks_estimate", (middleTokens+maxInput-1)/maxInput)
+		}
+		summary, err = c.summarizeMiddleChunks(ctx, prunedMiddle, tail)
+		if err != nil {
+			c.logger.Error("chunked summarization failed", "error", err)
+			return nil, fmt.Errorf("chunked summarization failed: %w", err)
+		}
 	}
 
 	// Step 4: assemble result.
@@ -224,6 +258,78 @@ func (c *ContextCompressor) buildSummaryInput(prunedMiddle, tail []*model.Messag
 	input = append(input, prunedMiddle...)
 	input = append(input, tail...)
 	return input
+}
+
+// summarizeMiddleChunks iteratively summarizes a large middle section in chunks.
+// The first chunk is summarized from scratch (with previousSummary as prior context).
+// Each subsequent chunk is summarized with the running summary injected into the
+// system prompt so it incrementally updates rather than starting over.
+//
+// Token budget per chunk is MaxLLMSummaryInputTokens. Chunks are formed by walking
+// backward from the end of the middle section to keep complete message pairs intact.
+func (c *ContextCompressor) summarizeMiddleChunks(ctx context.Context, middle, tail []*model.Message) (string, error) {
+	maxTokens := c.config.MaxLLMSummaryInputTokens
+	if maxTokens <= 0 {
+		maxTokens = 8000
+	}
+
+	runningSummary := c.previousSummary
+	remaining := middle
+
+	for len(remaining) > 0 {
+		// Select a chunk that fits within the token budget.
+		chunk, rest := c.takeChunkByTokens(remaining, maxTokens, tail)
+
+		// Build input: running summary goes in system prompt (already set below),
+		// the chunk messages go as user content.
+		chunkInput := c.buildSummaryInput(chunk, nil) // no tail in intermediate chunks
+		systemPrompt := buildSummarySystemPrompt(
+			runningSummary, c.config.SummaryTargetRatio, c.config.MaxSummaryTokens,
+		)
+
+		sum, err := c.compressor.Summarize(ctx, chunkInput, systemPrompt)
+		if err != nil {
+			return "", fmt.Errorf("chunk summarization failed: %w", err)
+		}
+		runningSummary = sum
+		remaining = rest
+
+		if len(remaining) > 0 && !c.config.QuietMode {
+			c.logger.Info("intermediate chunk summarized",
+				"remaining_msgs", len(remaining),
+				"running_summary_len", len(runningSummary))
+		}
+	}
+
+	return runningSummary, nil
+}
+
+// takeChunkByTokens selects messages from the front of 'messages' that fit within
+// the token budget, plus all tail messages (which are always included unchanged).
+// Returns (chunk, rest) where chunk = fitting messages + tail, and rest = what's left.
+func (c *ContextCompressor) takeChunkByTokens(messages []*model.Message, maxTokens int, tail []*model.Message) (chunk, rest []*model.Message) {
+	if len(messages) == 0 {
+		return nil, nil
+	}
+
+	// Walk forward accumulating tokens until we exceed the budget.
+	accumulated := 0
+	breakIdx := len(messages)
+	for i, m := range messages {
+		tokens := EstimateMessageTokens(string(m.Role), m.Content, len(m.ToolCalls))
+		if accumulated+tokens > maxTokens && i > 0 {
+			breakIdx = i
+			break
+		}
+		accumulated += tokens
+	}
+
+	// Chunk = messages[:breakIdx] + tail; Rest = messages[breakIdx:] (no tail — tail
+	// only appears in the final chunk so summarizer sees complete context).
+	chunk = make([]*model.Message, 0, breakIdx+len(tail))
+	chunk = append(chunk, messages[:breakIdx]...)
+	chunk = append(chunk, tail...)
+	return chunk, messages[breakIdx:]
 }
 
 // Reset clears per-session state (call after /new or /reset).
