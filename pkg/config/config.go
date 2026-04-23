@@ -561,13 +561,18 @@ func yamlUnmarshal(data []byte, v interface{}) error {
 // Load is a convenience function to load config from default locations
 func Load(configPaths ...string) (*Config, error) {
 	if len(configPaths) == 0 {
-		// Try common config locations
+		// Try common config locations, including ~/.hermes/config.yaml
 		locations := []string{
 			"config.json",
 			"config.yaml",
 			"config.yml",
 			".hermes/config.json",
 			".hermes/config.yaml",
+		}
+		// Also try ~/.hermes/config.yaml
+		if home, err := os.UserHomeDir(); err == nil {
+			homeCfg := filepath.Join(home, ".hermes", "config.yaml")
+			locations = append(locations, homeCfg)
 		}
 		for _, loc := range locations {
 			if _, err := os.Stat(loc); err == nil {

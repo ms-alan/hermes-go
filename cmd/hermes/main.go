@@ -21,11 +21,13 @@ func main() {
 	sessionIDFlag := flag.String("session-id", "", "Session ID to resume")
 	flag.Parse()
 
-	// Load configuration from ~/.hermes/config.yaml.
+	// Load configuration from ~/.hermes/config.yaml or default locations.
+	// If no config file is found, use zero values (CLI flags will override).
 	cfg, err := config.Load()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error loading config: %v\n", err)
-		os.Exit(1)
+		// Config file missing — not a fatal error; CLI flags + defaults will apply.
+		fmt.Fprintf(os.Stderr, "Note: no config file found (%v); using defaults.\n", err)
+		cfg = &config.Config{}
 	}
 
 	// Determine effective values: CLI flags override config defaults.
