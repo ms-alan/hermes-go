@@ -13,8 +13,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
-	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -339,26 +337,6 @@ var cronSchema = map[string]any{
 			"state":     map[string]any{"type": "string", "description": "Filter by state (for list)"},
 		},
 		"required": []any{"action"},
-	},
-}
-
-var webSearchSchema = map[string]any{
-	"name":        "web_search",
-	"description": "Search the web for information using the Tavily API. Returns a list of relevant web results with titles, URLs, and descriptions. Set TAVILY_API_KEY in environment to enable.",
-	"parameters": map[string]any{
-		"type": "object",
-		"properties": map[string]any{
-			"query": map[string]any{
-				"type":        "string",
-				"description": "The search query to look up on the web",
-			},
-			"limit": map[string]any{
-				"type":        "integer",
-				"description": "Maximum number of results to return (default: 5)",
-				"default":     5,
-			},
-		},
-		"required": []any{"query"},
 	},
 }
 
@@ -734,112 +712,6 @@ func terminalHandler(args map[string]any) string {
 	})
 }
 
-func webSearchHandler(args map[string]any) string {
-	query, ok := args["query"].(string)
-	if !ok || query == "" {
-		return toolError("web_search requires a 'query' argument")
-	}
-
-	limit := 5
-	if l, ok := args["limit"].(float64); ok {
-		limit = int(l)
-	}
-	if limit < 1 {
-		limit = 1
-	}
-	if limit > 20 {
-		limit = 20
-	}
-
-	apiKey := os.Getenv("TAVILY_API_KEY")
-	if apiKey == "" {
-		return toolResultData(map[string]any{
-			"query": query,
-			"results": []map[string]any{
-				{
-					"title":       "Web search not configured",
-					"url":         "",
-					"description": fmt.Sprintf("TAVILY_API_KEY is not set. Set it in ~/.hermes/.env to enable web search. Get your key at https://tavily.com"),
-				},
-			},
-			"info": "Set TAVILY_API_KEY in environment to enable web search",
-		})
-	}
-
-	// Build Tavily request
-	tavilyReq := map[string]any{
-		"query":         query,
-		"api_key":       apiKey,
-		"max_results":   limit,
-		"search_depth":  "basic",
-		"include_answer": false,
-	}
-	reqBody, err := json.Marshal(tavilyReq)
-	if err != nil {
-		return toolError(fmt.Sprintf("failed to marshal request: %v", err))
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
-	defer cancel()
-
-	req, err := http.NewRequestWithContext(ctx, "POST", "https://api.tavily.com/search", bytes.NewReader(reqBody))
-	if err != nil {
-		return toolError(fmt.Sprintf("failed to create request: %v", err))
-	}
-	req.Header.Set("Content-Type", "application/json")
-
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return toolError(fmt.Sprintf("Tavily API request failed: %v", err))
-	}
-	defer resp.Body.Close()
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return toolError(fmt.Sprintf("failed to read response: %v", err))
-	}
-
-	if resp.StatusCode != http.StatusOK {
-		return toolError(fmt.Sprintf("Tavily API returned status %d: %s", resp.StatusCode, string(body)))
-	}
-
-	var tavilyResp struct {
-		Results []struct {
-			Title       string `json:"title"`
-			URL         string `json:"url"`
-			Description string `json:"description"`
-			Content     string `json:"content"`
-		} `json:"results"`
-	}
-	if err := json.Unmarshal(body, &tavilyResp); err != nil {
-		return toolError(fmt.Sprintf("failed to parse Tavily response: %v", err))
-	}
-
-	results := make([]map[string]any, 0, len(tavilyResp.Results))
-	for i, r := range tavilyResp.Results {
-		desc := r.Description
-		if desc == "" {
-			desc = r.Content
-		}
-		// Truncate long descriptions to save tokens
-		if len(desc) > 300 {
-			desc = desc[:300] + "..."
-		}
-		results = append(results, map[string]any{
-			"position":    i + 1,
-			"title":       r.Title,
-			"url":         r.URL,
-			"description": desc,
-		})
-	}
-
-	return toolResultData(map[string]any{
-		"query":   query,
-		"results": results,
-		"count":   len(results),
-	})
-}
-
 // ---------------------------------------------------------------------------
 // Availability checks
 // ---------------------------------------------------------------------------
@@ -862,10 +734,7 @@ func checkFileTools() bool {
 	return true
 }
 
-// checkWebSearch verifies the Tavily API key is configured.
-func checkWebSearch() bool {
-	return os.Getenv("TAVILY_API_KEY") != ""
-}
+// CheckWebSearch is in web_search.go
 
 // ---------------------------------------------------------------------------
 // Package init — self-register all built-in tools
@@ -935,9 +804,9 @@ func init() {
 	Register(
 		"web_search",
 		"builtin",
-		webSearchSchema,
-		webSearchHandler,
-		checkWebSearch,
+		WebSearchSchema,
+		WebSearchHandler,
+		CheckWebSearch,
 		nil,
 		false,
 		"Search the web using Tavily API (requires TAVILY_API_KEY)",
