@@ -15,6 +15,7 @@ import (
 	"github.com/nousresearch/hermes-go/pkg/agent"
 	agentcontext "github.com/nousresearch/hermes-go/pkg/context"
 	"github.com/nousresearch/hermes-go/pkg/config"
+	"github.com/nousresearch/hermes-go/pkg/cron"
 	"github.com/nousresearch/hermes-go/pkg/gateway"
 	"github.com/nousresearch/hermes-go/pkg/gateway/qqbot"
 	"github.com/nousresearch/hermes-go/pkg/model"
@@ -42,8 +43,9 @@ func main() {
 			skDir = fmt.Sprintf("%s/.hermes/skills", home)
 		}
 	}
+	var skillLoader *skill.Loader
 	if skDir != "" {
-		skillLoader := skill.NewLoader(skDir, logger)
+		skillLoader = skill.NewLoader(skDir, logger)
 		if err := skillLoader.LoadAll(); err != nil {
 			logger.Warn("skill load warnings", "error", err)
 		}
@@ -130,11 +132,13 @@ func main() {
 
 	// Platform adapters
 	var adapters []gateway.PlatformAdapter
+	var qqAdapter *qqbot.Adapter
 
 	if containsStr(*platformsFlag, "qq") {
 		qqCfg := qqbot.DefaultConfig()
 		if qqCfg != nil {
-			qqAdapter, err := qqbot.NewAdapter(qqCfg, logger)
+			var err error
+			qqAdapter, err = qqbot.NewAdapter(qqCfg, logger)
 			if err != nil {
 				logger.Warn("QQ adapter error", "error", err)
 			} else {
@@ -149,6 +153,39 @@ func main() {
 			}
 		} else {
 			logger.Warn("QQ not configured (set QQ_APP_ID and QQ_CLIENT_SECRET)")
+		}
+	}
+
+	// Cron scheduler — wire job runner + QQ deliverer
+	var cronScheduler *cron.Scheduler
+	{
+		cronStore, err := cron.NewStore("")
+		if err != nil {
+			logger.Warn("cron store error", "error", err)
+		} else {
+			tools.SetCronStore(cronStore)
+
+			// Create AI runner
+			var cronRunner *cron.AicallRunner
+			if sessAgent != nil {
+				cronRunner = &cron.AicallRunner{
+					SessionAgent: sessAgent,
+					SkillLoader:  skillLoader,
+					Logger:       logger,
+				}
+			}
+
+			// Create QQ deliverer if adapter is connected
+			var cronDeliverer cron.Deliverer
+			if qqAdapter != nil {
+				cronDeliverer = cron.NewQQDeliverer(qqAdapter)
+			}
+
+			if cronRunner != nil {
+				cronScheduler = cron.NewScheduler(cronStore, cronRunner, cronDeliverer, logger)
+				cronScheduler.Start()
+				logger.Info("cron scheduler started")
+			}
 		}
 	}
 
@@ -174,6 +211,9 @@ func main() {
 		if err := httpServer.Shutdown(ctx); err != nil {
 			logger.Error("HTTP server shutdown", "error", err)
 		}
+	}
+	if cronScheduler != nil {
+		cronScheduler.Stop()
 	}
 	for _, a := range adapters {
 		a.Disconnect(ctx)
