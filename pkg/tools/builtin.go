@@ -1,9 +1,9 @@
 // Package tools builtin provides the core built-in tools for hermes-go:
 //
-//   - file_read:  read a file with optional offset and limit
+//   - file_read:  read a file with optional line offset and limit
 //   - file_write: write content to a file (overwrites existing)
 //   - terminal:   execute a shell command and return its stdout/stderr
-//   - web_search: placeholder web search (returns a not-implemented message)
+//   - web_search: search the web using Tavily API (env: TAVILY_API_KEY)
 //
 // All tools self-register by calling tools.Register at package init time.
 package tools
@@ -13,6 +13,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
+	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -95,7 +97,7 @@ var terminalSchema = map[string]any{
 
 var webSearchSchema = map[string]any{
 	"name":        "web_search",
-	"description": "[PLACEHOLDER] Web search is not yet implemented. This tool always returns a not-yet-implemented message. To enable, configure a search API backend (e.g. Tavily, Exa, SerpAPI) in builtin.go.",
+	"description": "Search the web for information using the Tavily API. Returns a list of relevant web results with titles, URLs, and descriptions. Set TAVILY_API_KEY in environment to enable.",
 	"parameters": map[string]any{
 		"type": "object",
 		"properties": map[string]any{
@@ -401,19 +403,92 @@ func webSearchHandler(args map[string]any) string {
 		limit = 20
 	}
 
-	// Placeholder: web search is not yet implemented.
-	// In a full implementation, this would call Tavily, Exa, or another search API.
-	_ = limit // silence unused warning
-	return toolResultData(map[string]any{
-		"query": query,
-		"results": []map[string]any{
-			{
-				"title":       "Web search not yet implemented",
-				"url":         "",
-				"description": fmt.Sprintf("Web search for %q is not yet implemented. Configure a search API backend to enable this feature.", query),
+	apiKey := os.Getenv("TAVILY_API_KEY")
+	if apiKey == "" {
+		return toolResultData(map[string]any{
+			"query": query,
+			"results": []map[string]any{
+				{
+					"title":       "Web search not configured",
+					"url":         "",
+					"description": fmt.Sprintf("TAVILY_API_KEY is not set. Set it in ~/.hermes/.env to enable web search. Get your key at https://tavily.com"),
+				},
 			},
-		},
-		"info": "web_search is a placeholder. Implement by adding a search API (e.g. Tavily, Exa) in builtin.go",
+			"info": "Set TAVILY_API_KEY in environment to enable web search",
+		})
+	}
+
+	// Build Tavily request
+	tavilyReq := map[string]any{
+		"query":         query,
+		"api_key":       apiKey,
+		"max_results":   limit,
+		"search_depth":  "basic",
+		"include_answer": false,
+	}
+	reqBody, err := json.Marshal(tavilyReq)
+	if err != nil {
+		return toolError(fmt.Sprintf("failed to marshal request: %v", err))
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+
+	req, err := http.NewRequestWithContext(ctx, "POST", "https://api.tavily.com/search", bytes.NewReader(reqBody))
+	if err != nil {
+		return toolError(fmt.Sprintf("failed to create request: %v", err))
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return toolError(fmt.Sprintf("Tavily API request failed: %v", err))
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return toolError(fmt.Sprintf("failed to read response: %v", err))
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return toolError(fmt.Sprintf("Tavily API returned status %d: %s", resp.StatusCode, string(body)))
+	}
+
+	var tavilyResp struct {
+		Results []struct {
+			Title       string `json:"title"`
+			URL         string `json:"url"`
+			Description string `json:"description"`
+			Content     string `json:"content"`
+		} `json:"results"`
+	}
+	if err := json.Unmarshal(body, &tavilyResp); err != nil {
+		return toolError(fmt.Sprintf("failed to parse Tavily response: %v", err))
+	}
+
+	results := make([]map[string]any, 0, len(tavilyResp.Results))
+	for i, r := range tavilyResp.Results {
+		desc := r.Description
+		if desc == "" {
+			desc = r.Content
+		}
+		// Truncate long descriptions to save tokens
+		if len(desc) > 300 {
+			desc = desc[:300] + "..."
+		}
+		results = append(results, map[string]any{
+			"position":    i + 1,
+			"title":       r.Title,
+			"url":         r.URL,
+			"description": desc,
+		})
+	}
+
+	return toolResultData(map[string]any{
+		"query":   query,
+		"results": results,
+		"count":   len(results),
 	})
 }
 
@@ -437,6 +512,11 @@ func checkFileTools() bool {
 	f.Close()
 	os.Remove(f.Name())
 	return true
+}
+
+// checkWebSearch verifies the Tavily API key is configured.
+func checkWebSearch() bool {
+	return os.Getenv("TAVILY_API_KEY") != ""
 }
 
 // ---------------------------------------------------------------------------
@@ -485,10 +565,10 @@ func init() {
 		"builtin",
 		webSearchSchema,
 		webSearchHandler,
-		nil, // always available (placeholder)
+		checkWebSearch,
 		nil,
 		false,
-		"Search the web for information (placeholder)",
+		"Search the web using Tavily API (requires TAVILY_API_KEY)",
 		"🔍",
 	)
 }

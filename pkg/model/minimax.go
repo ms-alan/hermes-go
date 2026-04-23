@@ -21,7 +21,7 @@ type MiniMaxClient struct {
 // OpenAI-compatible model hosted on MiniMax.
 func NewMiniMaxClient(apiKey string, model string, opts ...Option) (*MiniMaxClient, error) {
 	opts = append(opts,
-		WithBaseURL("https://api.minimaxi.com/anthropic"),
+		WithBaseURL("https://api.minimaxi.com/v1"),
 		WithAPIKey(apiKey),
 		WithModel(model),
 	)
