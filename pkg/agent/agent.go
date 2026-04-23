@@ -89,6 +89,11 @@ func (a *AIAgent) RunWithMessages(ctx context.Context, messages []*model.Message
 			Tools:    a.config.Tools,
 		}
 
+		// Debug: print context before LLM call
+		if debugJSON, err := json.MarshalIndent(req, "", "  "); err == nil {
+			a.logger.Debug(string(debugJSON))
+		}
+
 		// Call the LLM
 		resp, err := a.client.Chat(ctx, req)
 		if err != nil {
@@ -177,6 +182,11 @@ func (a *AIAgent) RunConversation(ctx context.Context, userMessage string, syste
 			Model:    a.config.Model,
 			Messages: messages,
 			Tools:    a.config.Tools,
+		}
+
+		// Debug: print context before LLM call
+		if debugJSON, err := json.MarshalIndent(req, "", "  "); err == nil {
+			a.logger.Debug(string(debugJSON))
 		}
 
 		// Call the LLM
