@@ -569,10 +569,28 @@ func Load(configPaths ...string) (*Config, error) {
 			".hermes/config.json",
 			".hermes/config.yaml",
 		}
-		// Also try ~/.hermes/config.yaml
+		// Also try ~/.hermes/config.yaml and load ~/.hermes/.env
 		if home, err := os.UserHomeDir(); err == nil {
 			homeCfg := filepath.Join(home, ".hermes", "config.yaml")
 			locations = append(locations, homeCfg)
+			// Load env file (same convention as hermes-agent)
+			if envPath := filepath.Join(home, ".hermes", ".env"); err == nil {
+				if data, err := os.ReadFile(envPath); err == nil {
+					for _, line := range strings.Split(string(data), "\n") {
+						line = strings.TrimSpace(line)
+						if line == "" || strings.HasPrefix(line, "#") {
+							continue
+						}
+						if idx := strings.IndexByte(line, '='); idx > 0 {
+							key := strings.TrimSpace(line[:idx])
+							val := strings.TrimSpace(line[idx+1:])
+							if _, exists := os.LookupEnv(key); !exists && val != "" {
+								os.Setenv(key, val)
+							}
+						}
+					}
+				}
+			}
 		}
 		for _, loc := range locations {
 			if _, err := os.Stat(loc); err == nil {
