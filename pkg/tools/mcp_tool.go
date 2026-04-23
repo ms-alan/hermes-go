@@ -82,6 +82,12 @@ var initMCPServers = sync.OnceFunc(func() {
 	}
 })
 
+// init starts MCP server connections when the package is loaded.
+// MCP servers are registered as tools in the hermes registry automatically.
+func init() {
+	initMCPServers()
+}
+
 // connectMCPServer connects to a single MCP server, initializes it,
 // discovers its tools, and registers them with the hermes registry.
 func connectMCPServer(cfg mcp.MCPServerConfig) {

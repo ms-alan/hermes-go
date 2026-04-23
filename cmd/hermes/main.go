@@ -12,6 +12,7 @@ import (
 	"github.com/nousresearch/hermes-go/pkg/config"
 	"github.com/nousresearch/hermes-go/pkg/model"
 	"github.com/nousresearch/hermes-go/pkg/session"
+	"github.com/nousresearch/hermes-go/pkg/skill"
 )
 
 func main() {
@@ -68,6 +69,12 @@ func main() {
 	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{
 		Level: slog.LevelInfo,
 	}))
+
+	// Load skillsets configuration (~/.hermes/skills.yaml).
+	if err := skill.LoadSkillsets(skill.DefaultSkillsYAMLPath()); err != nil {
+		logger.Warn("failed to load skillsets config", "error", err)
+	}
+	skill.SetHubLogger(logger)
 
 	// Build agent config.
 	agentConfig := agent.Config{

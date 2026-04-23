@@ -12,6 +12,7 @@ import (
 	"github.com/nousresearch/hermes-go/pkg/agent"
 	"github.com/nousresearch/hermes-go/pkg/model"
 	"github.com/nousresearch/hermes-go/pkg/session"
+	"github.com/nousresearch/hermes-go/pkg/skill"
 	"github.com/nousresearch/hermes-go/pkg/tools"
 	ctxmgr "github.com/nousresearch/hermes-go/pkg/context"
 )
@@ -140,6 +141,8 @@ func (r *repl) handleCommand(ctx context.Context, cmd string) error {
 		r.printTools()
 	case "/sessions":
 		r.printSessions()
+	case "/skills":
+		r.printSkills()
 	case "/new":
 		sessID, err := r.sessionAgent.New("cli", r.defaultModel, "")
 		if err != nil {
@@ -188,6 +191,7 @@ func (r *repl) printHelp() {
 	fmt.Println("  /help     - Show this help message")
 	fmt.Println("  /tools    - List available tools")
 	fmt.Println("  /sessions - List active sessions")
+	fmt.Println("  /skills   - Show skillsets and loaded skills")
 	fmt.Println("  /new      - Start a new session")
 	fmt.Println("  /switch   - Switch to a session (/switch <session-id>)")
 	fmt.Println("  /search   - Search session messages (/search <query>)")
@@ -205,6 +209,60 @@ func (r *repl) printTools() {
 	}
 	for _, name := range toolNames {
 		fmt.Printf("  - %s\n", name)
+	}
+}
+
+func (r *repl) printSkills() {
+	skillsets := skill.ListSkillsets()
+	allSkills := skill.List()
+
+	fmt.Println("Skills Hub")
+	fmt.Println("===========")
+
+	if len(skillsets) == 0 {
+		fmt.Println("  No skillsets configured — all skills loaded by default.")
+		fmt.Println("  Create ~/.hermes/skills.yaml to enable skillsets filtering.")
+	} else {
+		fmt.Println("Skillsets:")
+		for name, enabled := range skillsets {
+			status := "✅ enabled"
+			if !enabled {
+				status = "❌ disabled"
+			}
+			fmt.Printf("  %s — %s\n", name, status)
+		}
+	}
+
+	fmt.Println()
+	fmt.Println("Loaded skills:")
+	if len(allSkills) == 0 {
+		fmt.Println("  (no skills registered)")
+	} else {
+		// Group by category (prefix before /)
+		byCategory := make(map[string][]string)
+		var categories []string
+		for _, s := range allSkills {
+			parts := strings.SplitN(s.Name, "/", 2)
+			cat := "general"
+			name := s.Name
+			if len(parts) == 2 {
+				cat, name = parts[0], parts[1]
+			}
+			if _, ok := byCategory[cat]; !ok {
+				categories = append(categories, cat)
+			}
+			byCategory[cat] = append(byCategory[cat], name)
+		}
+		for _, cat := range categories {
+			fmt.Printf("  [%s]\n", cat)
+			for _, name := range byCategory[cat] {
+				enabled := "✅"
+				if !skill.IsSkillsetEnabled(cat) {
+					enabled = "❌"
+				}
+				fmt.Printf("    %s %s\n", enabled, name)
+			}
+		}
 	}
 }
 

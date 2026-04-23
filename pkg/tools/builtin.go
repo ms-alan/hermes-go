@@ -270,6 +270,11 @@ func fileWriteHandler(args map[string]any) string {
 		return toolError("file_write requires a 'content' argument")
 	}
 
+	// Authorization check (approval.go) — scans path for dangerous targets.
+	if approved, reason := Authorize("file_write", path, ""); !approved {
+		return toolError(fmt.Sprintf("file_write blocked: %s", reason))
+	}
+
 	if isBlockedDevice(path) {
 		return toolError(fmt.Sprintf("refusing to write to blocked device path %q", path))
 	}
@@ -306,10 +311,85 @@ func fileWriteHandler(args map[string]any) string {
 	})
 }
 
+// ---------------------------------------------------------------------------
+// file_delete
+// ---------------------------------------------------------------------------
+
+var fileDeleteSchema = map[string]any{
+	"name":        "file_delete",
+	"description": "Delete a file or empty directory. Use with caution — deleted files cannot be recovered.",
+	"parameters": map[string]any{
+		"type": "object",
+		"properties": map[string]any{
+			"path": map[string]any{
+				"type":        "string",
+				"description": "Absolute path of the file or directory to delete",
+			},
+			"recursive": map[string]any{
+				"type":        "boolean",
+				"description": "If true, delete directory and all its contents",
+			},
+		},
+		"required": []any{"path"},
+	},
+}
+
+func fileDeleteHandler(args map[string]any) string {
+	path, ok := args["path"].(string)
+	if !ok || path == "" {
+		return toolError("file_delete requires a 'path' argument")
+	}
+
+	// Authorization check (approval.go) — scans path for sensitive targets.
+	if approved, reason := Authorize("file_delete", path, ""); !approved {
+		return toolError(fmt.Sprintf("file_delete blocked: %s", reason))
+	}
+
+	absPath, err := filepath.Abs(os.ExpandEnv(path))
+	if err != nil {
+		return toolError(fmt.Sprintf("invalid path: %v", err))
+	}
+
+	info, err := os.Stat(absPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return toolError(fmt.Sprintf("path does not exist: %s", absPath))
+		}
+		return toolError(fmt.Sprintf("stat: %v", err))
+	}
+
+	recursive, _ := args["recursive"].(bool)
+	if info.IsDir() && !recursive {
+		return toolError(fmt.Sprintf("path is a directory (use recursive:true to delete anyway): %s", absPath))
+	}
+
+	if info.IsDir() {
+		if err := os.RemoveAll(absPath); err != nil {
+			return toolError(fmt.Sprintf("failed to delete directory: %v", err))
+		}
+	} else {
+		if err := os.Remove(absPath); err != nil {
+			return toolError(fmt.Sprintf("failed to delete file: %v", err))
+		}
+	}
+
+	return toolResultData(map[string]any{
+		"path":      absPath,
+		"type":      map[bool]string{true: "directory", false: "file"}[info.IsDir()],
+		"recursive": recursive,
+		"success":   true,
+	})
+}
+
 func terminalHandler(args map[string]any) string {
 	command, ok := args["command"].(string)
 	if !ok || command == "" {
 		return toolError("terminal requires a 'command' argument")
+	}
+
+	// Authorization check (approval.go) — scans command for dangerous patterns.
+	if approved, reason := Authorize("terminal", command, ""); !approved {
+		return toolError(fmt.Sprintf("terminal command blocked: %s", reason))
 	}
 
 	timeout := 60
@@ -546,6 +626,18 @@ func init() {
 		false,
 		"Write content to a file, creating or overwriting as needed",
 		"✏️",
+	)
+
+	Register(
+		"file_delete",
+		"builtin",
+		fileDeleteSchema,
+		fileDeleteHandler,
+		checkFileTools,
+		nil,
+		false,
+		"Delete a file or empty directory (use recursive:true for directories)",
+		"🗑️",
 	)
 
 	Register(
