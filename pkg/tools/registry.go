@@ -191,6 +191,17 @@ func (r *ToolRegistry) List() []string {
 	return names
 }
 
+// ListEntries returns a snapshot of all tool entries. Thread-safe.
+func (r *ToolRegistry) ListEntries() []*ToolEntry {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	entries := make([]*ToolEntry, 0, len(r.tools))
+	for _, e := range r.tools {
+		entries = append(entries, e)
+	}
+	return entries
+}
+
 // GetDefinitions returns OpenAI-format tool definitions for the given tool names.
 // Only tools whose CheckFn returns true (or have no CheckFn) are included.
 func (r *ToolRegistry) GetDefinitions(names []string) []map[string]any {

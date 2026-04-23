@@ -28,6 +28,8 @@ type AIAgent struct {
 type ToolHandler func(ctx context.Context, req *model.ToolCallRequest) *model.ToolResult
 
 // NewAIAgent creates a new AIAgent with the given LLM client and config.
+// Tools are loaded into the agent by bridge.RegisterBuiltinToolsToAgent
+// (called by cmd/hermes after this function returns).
 func NewAIAgent(client model.LLMClient, cfg Config) *AIAgent {
 	cfg.Defaults()
 	return &AIAgent{
@@ -299,3 +301,6 @@ func (a *AIAgent) SyncToolsToConfig() {
 		})
 	}
 }
+
+// SyncToolsToConfig syncs the registered tools into agent.Config.Tools
+// so they are sent to the LLM in subsequent requests.
