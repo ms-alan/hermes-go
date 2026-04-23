@@ -49,6 +49,7 @@ func main() {
 		if err := skillLoader.LoadAll(); err != nil {
 			logger.Warn("skill load warnings", "error", err)
 		}
+		skill.SetLoader(skillLoader)
 	}
 
 	// Load configuration from ~/.hermes/config.yaml.

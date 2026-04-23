@@ -16,6 +16,8 @@ import (
 type Loader struct {
 	SkillsDir string
 	Logger    *slog.Logger
+	// skillDirs maps skill name → its directory path (populated during LoadAll).
+	skillDirs map[string]string
 }
 
 // NewLoader creates a skill loader for the given skills directory.
@@ -62,19 +64,139 @@ func (l *Loader) loadFromManifest(dir, manifestPath string) error {
 	if err != nil {
 		return fmt.Errorf("read manifest: %w", err)
 	}
-	name, desc, commands, rt, entry := parseSKILLMD(string(data))
+
+	// Detect YAML frontmatter (--- ... ---) or simple key-value format.
+	var skill *Skill
+	if strings.Contains(string(data), "---") {
+		skill, err = l.parseYAMLFrontmatter(string(data), dir)
+		if err != nil {
+			return fmt.Errorf("parse YAML frontmatter: %w", err)
+		}
+	} else {
+		name, desc, commands, rt, entry := parseSKILLMD(string(data))
+		if name == "" {
+			return fmt.Errorf("manifest missing name field")
+		}
+		if entry == "" {
+			entry = "run.sh"
+		}
+		if rt == "" {
+			rt = "shell"
+		}
+		skill = l.buildSkill(name, desc, commands, rt, entry, dir)
+	}
+
+	RegisterSkill(skill)
+	l.Logger.Info("loaded skill", "name", skill.Name)
+	return nil
+}
+
+// parseYAMLFrontmatter parses a SKILL.md with YAML frontmatter (--- ... ---).
+// The frontmatter fields are: name, brief_description, description, commands,
+// runtime, entry, version, author, license, category, platforms, prerequisites,
+// tags, config, tier.
+func (l *Loader) parseYAMLFrontmatter(content, dir string) (*Skill, error) {
+	// Extract frontmatter block between --- markers.
+	lines := strings.Split(content, "\n")
+	var frontmatterLines []string
+	inFrontmatter := false
+	bodyLines := []string{}
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if strings.HasPrefix(trimmed, "---") {
+			if !inFrontmatter {
+				inFrontmatter = true
+				continue
+			}
+			// End of frontmatter.
+			break
+		}
+		if inFrontmatter {
+			frontmatterLines = append(frontmatterLines, line)
+		} else {
+			bodyLines = append(bodyLines, line)
+		}
+	}
+
+	// Parse frontmatter as simple key: value pairs.
+	fm := make(map[string]string)
+	for _, fl := range frontmatterLines {
+		fl = strings.TrimSpace(fl)
+		if fl == "" || strings.HasPrefix(fl, "#") {
+			continue
+		}
+		idx := strings.Index(fl, ":")
+		if idx < 0 {
+			continue
+		}
+		key := strings.TrimSpace(fl[:idx])
+		val := strings.TrimSpace(fl[idx+1:])
+		fm[key] = val
+	}
+
+	name := fm["name"]
 	if name == "" {
-		return fmt.Errorf("manifest missing name field")
+		return nil, fmt.Errorf("frontmatter missing name")
+	}
+
+	briefDesc := fm["brief_description"]
+	desc := fm["description"]
+	commands := parseBracketList(fm["commands"])
+	runtime := fm["runtime"]
+	entry := fm["entry"]
+	version := fm["version"]
+	author := fm["author"]
+	license := fm["license"]
+	category := fm["category"]
+	platforms := parseBracketList(fm["platforms"])
+	prerequisites := parseBracketList(fm["prerequisites"])
+	tags := parseBracketList(fm["tags"])
+	config := fm["config"]
+
+	if runtime == "" {
+		runtime = "shell"
 	}
 	if entry == "" {
 		entry = "run.sh"
 	}
-	if rt == "" {
-		rt = "shell"
+
+	skill := l.buildSkill(name, desc, commands, runtime, entry, dir)
+	skill.BriefDescription = briefDesc
+	if skill.BriefDescription == "" {
+		skill.BriefDescription = desc
+	}
+	skill.Version = version
+	skill.Author = author
+	skill.License = license
+	skill.Category = category
+	skill.Platforms = platforms
+	skill.Prerequisites = prerequisites
+	skill.Tags = tags
+	skill.Config = config
+
+	// Parse tier field.
+	switch fm["tier"] {
+	case "1":
+		skill.Tier = Tier1Brief
+	case "3":
+		skill.Tier = Tier3Full
+	default:
+		skill.Tier = Tier2Metadata
 	}
 
+	// Store dir for linked file loading.
+	if l.skillDirs == nil {
+		l.skillDirs = make(map[string]string)
+	}
+	l.skillDirs[name] = dir
+
+	return skill, nil
+}
+
+// buildSkill creates a Skill with the given metadata and a handler for the runtime.
+func (l *Loader) buildSkill(name, desc string, commands []string, runtime, entry, dir string) *Skill {
 	var handler SkillHandler
-	switch rt {
+	switch runtime {
 	case "shell":
 		scriptPath := filepath.Join(dir, entry)
 		handler = makeShellHandler(scriptPath)
@@ -82,12 +204,20 @@ func (l *Loader) loadFromManifest(dir, manifestPath string) error {
 		scriptPath := filepath.Join(dir, entry)
 		handler = makePythonHandler(scriptPath)
 	default:
-		return fmt.Errorf("unsupported runtime: %s", rt)
+		handler = func(ctx context.Context, args string, agent AgentInterface) (string, error) {
+			return "", fmt.Errorf("unsupported runtime: %s", runtime)
+		}
 	}
 
-	Register(name, desc, commands, handler)
-	l.Logger.Info("loaded skill", "name", name)
-	return nil
+	return &Skill{
+		Name:             name,
+		BriefDescription: desc,
+		Description:      desc,
+		Commands:         commands,
+		Handler:          handler,
+		Tier:             Tier2Metadata,
+		LinkedFiles:      make(map[string]string),
+	}
 }
 
 func (l *Loader) loadFromJSONManifest(dir, manifestPath string) error {
@@ -169,6 +299,39 @@ func parseBracketList(s string) []string {
 		}
 	}
 	return result
+}
+
+// LoadLinkedFiles loads linked files (references/, templates/, scripts/, assets/)
+// for a named skill. Returns the populated LinkedFiles map.
+func (l *Loader) LoadLinkedFiles(name string) (map[string]string, error) {
+	dir, ok := l.skillDirs[name]
+	if !ok {
+		return nil, fmt.Errorf("skill %q: directory not known (load it first)", name)
+	}
+
+	linkedDirs := []string{"references", "templates", "scripts", "assets"}
+	result := make(map[string]string)
+
+	for _, ld := range linkedDirs {
+		ldPath := filepath.Join(dir, ld)
+		entries, err := os.ReadDir(ldPath)
+		if err != nil {
+			continue // dir doesn't exist
+		}
+		for _, entry := range entries {
+			if entry.IsDir() {
+				continue
+			}
+			filePath := filepath.Join(ldPath, entry.Name())
+			content, err := os.ReadFile(filePath)
+			if err != nil {
+				continue
+			}
+			relPath := filepath.Join(ld, entry.Name())
+			result[relPath] = string(content)
+		}
+	}
+	return result, nil
 }
 
 // LoadGoPlugin loads a Go plugin (.so file, Linux only).

@@ -1171,6 +1171,30 @@ func init() {
 		"Convert text to speech audio via MiniMax TTS API",
 		"🔊",
 	)
+
+	Register(
+		"skills_list",
+		"builtin",
+		skillsListSchema,
+		skillsListHandler,
+		nil,
+		nil,
+		false,
+		"List all skills (tier 1 — name + brief description only)",
+		"📋",
+	)
+
+	Register(
+		"skill_view",
+		"builtin",
+		skillViewSchema,
+		skillViewHandler,
+		nil,
+		nil,
+		false,
+		"View full skill metadata (tier 2) or linked file content (tier 3)",
+		"🔍",
+	)
 }
 
 // ---------------------------------------------------------------------------

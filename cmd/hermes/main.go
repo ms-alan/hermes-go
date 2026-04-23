@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"os"
 	"os/signal"
+	"path/filepath"
 
 	"github.com/nousresearch/hermes-go/pkg/agent"
 	"github.com/nousresearch/hermes-go/pkg/config"
@@ -75,6 +76,16 @@ func main() {
 		logger.Warn("failed to load skillsets config", "error", err)
 	}
 	skill.SetHubLogger(logger)
+
+	// Load skills from ~/.hermes/skills/.
+	if home, err := os.UserHomeDir(); err == nil {
+		skDir := filepath.Join(home, ".hermes", "skills")
+		skillLoader := skill.NewLoader(skDir, logger)
+		if err := skillLoader.LoadAll(); err != nil {
+			logger.Warn("skill load warnings", "error", err)
+		}
+		skill.SetLoader(skillLoader)
+	}
 
 	// Build agent config.
 	agentConfig := agent.Config{
