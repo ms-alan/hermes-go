@@ -10,21 +10,25 @@ import (
 	"strings"
 
 	"github.com/nousresearch/hermes-go/pkg/agent"
+	hermescontext "github.com/nousresearch/hermes-go/pkg/context"
+	hermesmemory "github.com/nousresearch/hermes-go/pkg/memory"
 	"github.com/nousresearch/hermes-go/pkg/model"
 	"github.com/nousresearch/hermes-go/pkg/session"
 	"github.com/nousresearch/hermes-go/pkg/skill"
 	"github.com/nousresearch/hermes-go/pkg/tools"
-	ctxmgr "github.com/nousresearch/hermes-go/pkg/context"
 )
 
 // repl represents the interactive Read-Eval-Print-Loop.
 type repl struct {
 	sessionAgent *agent.SessionAgent
 	store        *session.Store
-	ctxMgr       *ctxmgr.Manager
+	ctxMgr       *hermescontext.Manager
+	memStore     *hermesmemory.MemoryStore
+	ctxLoader    *hermescontext.Loader
 	logger       *slog.Logger
 	modelClient  model.LLMClient
 	defaultModel string
+	systemPrompt string // frozen snapshot assembled at startup
 }
 
 // newREPL creates a new REPL instance.
@@ -32,9 +36,23 @@ func newREPL(agentCfg agent.Config, store *session.Store, logger *slog.Logger, m
 	if logger == nil {
 		logger = slog.Default()
 	}
-	// Create context manager
-	ctxCfg := ctxmgr.DefaultManagerConfig(200000)
-	ctxMgr := ctxmgr.NewManager(ctxCfg, logger, modelClient)
+	// Create context manager (for message compression)
+	ctxCfg := hermescontext.DefaultManagerConfig(200000)
+	ctxMgr := hermescontext.NewManager(ctxCfg, logger, modelClient)
+
+	// Create memory store
+	memStore, err := hermesmemory.NewMemoryStore()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Warning: failed to create memory store: %v\n", err)
+	} else {
+		tools.SetMemoryStore(memStore)
+	}
+
+	// Create context file loader
+	ctxLoader := hermescontext.NewLoader("", "")
+
+	// Build system prompt from SOUL.md and memory
+	systemPrompt := buildSystemPrompt(ctxLoader, memStore)
 
 	// Create AIAgent
 	aiAgent := agent.NewAIAgent(modelClient, agentCfg)
@@ -53,9 +71,12 @@ func newREPL(agentCfg agent.Config, store *session.Store, logger *slog.Logger, m
 		sessionAgent: sessionAgent,
 		store:        store,
 		ctxMgr:       ctxMgr,
+		memStore:     memStore,
+		ctxLoader:    ctxLoader,
 		logger:       logger,
 		modelClient:  modelClient,
 		defaultModel: defaultModel,
+		systemPrompt: systemPrompt,
 	}
 }
 
@@ -67,7 +88,7 @@ func (r *repl) Run(ctx context.Context) error {
 	fmt.Println()
 
 	// Auto-create a new session
-	_, err := r.sessionAgent.New("cli", r.defaultModel, "")
+	_, err := r.sessionAgent.New("cli", r.defaultModel, r.systemPrompt)
 	if err != nil {
 		r.logger.Warn("failed to create initial session", "error", err)
 	}
@@ -115,7 +136,8 @@ func (r *repl) Run(ctx context.Context) error {
 			continue
 		}
 
-		// Regular user message — send to SessionAgent
+		// Regular user message — expand @ references, then send to SessionAgent
+		line, _ = r.ctxLoader.ExpandRefs(line)
 		resp, err := r.sessionAgent.Chat(ctx, line)
 		if err != nil {
 			fmt.Printf("Error: %v\n", err)
@@ -144,7 +166,7 @@ func (r *repl) handleCommand(ctx context.Context, cmd string) error {
 	case "/skills":
 		r.printSkills()
 	case "/new":
-		sessID, err := r.sessionAgent.New("cli", r.defaultModel, "")
+		sessID, err := r.sessionAgent.New("cli", r.defaultModel, r.systemPrompt)
 		if err != nil {
 			return fmt.Errorf("failed to create session: %w", err)
 		}
@@ -184,6 +206,34 @@ func (r *repl) handleCommand(ctx context.Context, cmd string) error {
 		return fmt.Errorf("unknown command: %s", name)
 	}
 	return nil
+}
+
+// buildSystemPrompt assembles the initial system prompt from SOUL.md, memory, and project context.
+func buildSystemPrompt(ctxLoader *hermescontext.Loader, memStore *hermesmemory.MemoryStore) string {
+	var parts []string
+
+	// Slot #1: SOUL.md — agent identity
+	if soul, err := ctxLoader.LoadSOUL(); err == nil && soul != "" {
+		parts = append(parts, soul)
+	}
+
+	// Memory snapshot
+	if memStore != nil {
+		parts = append(parts, memStore.FrozenSnapshot())
+	}
+
+	// Project context
+	if proj, err := ctxLoader.LoadProjectContext(); err == nil && proj != "" {
+		parts = append(parts, proj)
+	}
+
+	// Fallback identity if nothing loaded
+	if len(parts) == 0 {
+		parts = append(parts, "You are Hermes, a helpful AI assistant.")
+	}
+
+	result := strings.Join(parts, "\n\n")
+	return result
 }
 
 func (r *repl) printHelp() {

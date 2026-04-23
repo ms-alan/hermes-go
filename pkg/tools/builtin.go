@@ -95,6 +95,40 @@ var terminalSchema = map[string]any{
 	},
 }
 
+var memorySchema = map[string]any{
+	"name":        "memory",
+	"description": "Manage agent persistent memory (MEMORY.md and USER.md). Actions: add, replace, remove, snapshot, freeze, show.",
+	"parameters": map[string]any{
+		"type": "object",
+		"properties": map[string]any{
+			"action": map[string]any{
+				"type":        "string",
+				"description": "Action: add, replace, remove, snapshot, freeze, show",
+				"enum":        []any{"add", "replace", "remove", "snapshot", "freeze", "show"},
+			},
+			"target": map[string]any{
+				"type":        "string",
+				"description": "memory (default) or user",
+				"default":     "memory",
+			},
+			"content": map[string]any{
+				"type":        "string",
+				"description": "Content for add/replace actions",
+			},
+			"old_text": map[string]any{
+				"type":        "string",
+				"description": "Exact text to replace or remove (for replace/remove)",
+			},
+			"depth": map[string]any{
+				"type":        "number",
+				"description": "Snapshot depth (lines per entry, default 3)",
+				"default":     3,
+			},
+		},
+		"required": []any{"action"},
+	},
+}
+
 var webSearchSchema = map[string]any{
 	"name":        "web_search",
 	"description": "Search the web for information using the Tavily API. Returns a list of relevant web results with titles, URLs, and descriptions. Set TAVILY_API_KEY in environment to enable.",
@@ -662,6 +696,18 @@ func init() {
 		false,
 		"Search the web using Tavily API (requires TAVILY_API_KEY)",
 		"🔍",
+	)
+
+	Register(
+		"memory",
+		"builtin",
+		memorySchema,
+		memoryToolHandler,
+		nil,
+		nil,
+		false,
+		"Manage agent memory — add/replace/remove/show entries in MEMORY.md or USER.md",
+		"🧠",
 	)
 }
 
