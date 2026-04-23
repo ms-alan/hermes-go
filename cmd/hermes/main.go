@@ -42,12 +42,24 @@ func main() {
 	if baseURL == "" {
 		baseURL = cfg.Model.APIBase
 		if baseURL == "" {
+			baseURL = os.Getenv("MINIMAX_CN_BASE_URL")
+		}
+		if baseURL == "" {
+			baseURL = os.Getenv("OPENAI_BASE_URL")
+		}
+		if baseURL == "" {
 			baseURL = "https://api.openai.com/v1"
 		}
 	}
 	apiKey := *apiKeyFlag
 	if apiKey == "" {
 		apiKey = cfg.Model.APIKey
+		if apiKey == "" {
+			apiKey = os.Getenv("MINIMAX_CN_API_KEY")
+		}
+		if apiKey == "" {
+			apiKey = os.Getenv("OPENAI_API_KEY")
+		}
 	}
 	sessionID := *sessionIDFlag
 
