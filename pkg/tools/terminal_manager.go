@@ -39,7 +39,11 @@ func runTerminalCommand(args map[string]any) string {
 	}
 
 	ctx := context.Background()
-	stdout, stderr, exitCode, err := terminalManager.Run(ctx, backend, command, time.Duration(timeout)*time.Second)
+	pty := false
+	if p, ok := args["pty"].(bool); ok {
+		pty = p
+	}
+	stdout, stderr, exitCode, err := terminalManager.Run(ctx, backend, command, time.Duration(timeout)*time.Second, pty)
 	if err != nil {
 		return toolResultData(map[string]any{
 			"command":   command,

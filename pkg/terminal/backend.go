@@ -13,10 +13,14 @@ package terminal
 import (
 	"context"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"strings"
+	"sync"
 	"time"
+
+	"github.com/creack/pty"
 )
 
 // Backend is the interface for terminal backends.
@@ -77,6 +81,103 @@ func (b *LocalBackend) Run(ctx context.Context, command string, timeout time.Dur
 	return string(out), errOut, 0, nil
 }
 
+// RunPty executes a command in a pseudo-terminal (PTY) for interactive CLI tools.
+// Unlike Run, this captures full terminal output including ANSI escape codes.
+// PTY mode is required for interactive programs like vim, nano, htop, python REPL, etc.
+func (b *LocalBackend) RunPty(ctx context.Context, command string, timeout time.Duration) (string, string, int, error) {
+	if timeout <= 0 {
+		timeout = 60 * time.Second
+	}
+	if timeout > 600*time.Second {
+		timeout = 600 * time.Second
+	}
+
+	// Prepare environment — set TERM for proper terminal emulation
+	env := os.Environ()
+	env = append(env, "TERM=xterm-256color")
+
+	var args []string
+	if strings.Contains(command, "&&") || strings.Contains(command, "||") || strings.Contains(command, ";") {
+		args = []string{"sh", "-c", command}
+	} else {
+		parts := strings.Fields(command)
+		if len(parts) == 0 {
+			return "", "", -1, fmt.Errorf("empty command")
+		}
+		args = parts
+	}
+
+	cmd := exec.Command(args[0], args[1:]...)
+	cmd.Env = env
+
+	// Use pty.Start which forks, sets up PTY as controlling terminal, and starts the process
+	ptmx, err := pty.Start(cmd)
+	if err != nil {
+		return "", "", -1, fmt.Errorf("failed to start PTY: %w", err)
+	}
+	defer ptmx.Close()
+
+	// Create a context with deadline for reading
+	if dl, ok := ctx.Deadline(); ok {
+		ptmx.SetReadDeadline(dl)
+	}
+
+	// Read output from PTY master
+	var wg sync.WaitGroup
+	var stdout []byte
+	var mu sync.Mutex
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		buf := make([]byte, 4096)
+		for {
+			n, err := ptmx.Read(buf)
+			if n > 0 {
+				mu.Lock()
+				stdout = append(stdout, buf[:n]...)
+				mu.Unlock()
+			}
+			if err != nil {
+				if err != io.EOF {
+					// Log but don't fail on read errors
+				}
+				break
+			}
+		}
+	}()
+
+	// Wait for the process with timeout
+	done := make(chan error, 1)
+	go func() {
+		done <- cmd.Wait()
+	}()
+
+	select {
+	case err := <-done:
+		// Process finished — drain any remaining output
+		ptmx.SetReadDeadline(time.Now().Add(200 * time.Millisecond))
+		wg.Wait()
+		exitCode := 0
+		if err != nil {
+			if exitErr, ok := err.(*exec.ExitError); ok {
+				exitCode = exitErr.ExitCode()
+				if exitCode < 0 {
+					exitCode = -1
+				}
+			} else {
+				exitCode = -1
+			}
+		}
+		return string(stdout), "", exitCode, nil
+	case <-ctx.Done():
+		cmd.Process.Kill()
+		cmd.Wait()
+		wg.Wait()
+		return string(stdout), "", -1, fmt.Errorf("command timed out after %v", timeout)
+	}
+}
+
 // ---------------------------------------------------------------------------
 // Docker backend — docker exec into a container
 // ---------------------------------------------------------------------------
@@ -123,7 +224,6 @@ func (b *DockerBackend) Run(ctx context.Context, command string, timeout time.Du
 		return string(out), "", -1, fmt.Errorf("docker exec timed out after %v", timeout)
 	}
 	if err != nil {
-		// Check if docker is available
 		if strings.Contains(string(out), "command not found") || strings.Contains(string(out), "'docker' not found") {
 			return "", "", -1, fmt.Errorf("docker not found in PATH")
 		}
@@ -226,12 +326,16 @@ func (m *Manager) RegisterSSH(id string, cfg SSHBackend) {
 
 // Run executes a command using the specified backend.
 // backendID can be "local" (default), "docker:<id>", or "ssh:<id>".
-func (m *Manager) Run(ctx context.Context, backendID, command string, timeout time.Duration) (string, string, int, error) {
+// When pty=true and backend is "local", runs in PTY mode for interactive CLI tools.
+func (m *Manager) Run(ctx context.Context, backendID, command string, timeout time.Duration, pty bool) (string, string, int, error) {
 	var backend Backend
 	var err error
 
 	switch {
 	case backendID == "" || backendID == "local":
+		if pty {
+			return m.local.RunPty(ctx, command, timeout)
+		}
 		backend = m.local
 	case strings.HasPrefix(backendID, "docker:"):
 		name := strings.TrimPrefix(backendID, "docker:")
