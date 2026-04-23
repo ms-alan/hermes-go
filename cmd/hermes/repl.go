@@ -31,6 +31,32 @@ type repl struct {
 	systemPrompt string // frozen snapshot assembled at startup
 }
 
+// agentInterfaceWrapper adapts *SessionAgent to skill.AgentInterface.
+type agentInterfaceWrapper struct {
+	sa           *agent.SessionAgent
+	systemPrompt string
+}
+
+func (w *agentInterfaceWrapper) Chat(ctx context.Context, message string) (string, error) {
+	return w.sa.Chat(ctx, message)
+}
+
+func (w *agentInterfaceWrapper) SystemPrompt() string {
+	return w.systemPrompt
+}
+
+// runSkill invokes a skill handler and prints its output.
+func (r *repl) runSkill(ctx context.Context, sk *skill.Skill, args string) error {
+	agent := &agentInterfaceWrapper{sa: r.sessionAgent, systemPrompt: r.systemPrompt}
+	r.logger.Info("invoking skill", "skill", sk.Name, "args", args)
+	result, err := sk.Handler(ctx, args, agent)
+	if err != nil {
+		return fmt.Errorf("skill %s failed: %w", sk.Name, err)
+	}
+	fmt.Printf("%s\n", result)
+	return nil
+}
+
 // newREPL creates a new REPL instance.
 func newREPL(agentCfg agent.Config, store *session.Store, logger *slog.Logger, modelClient model.LLMClient, defaultModel string) *repl {
 	if logger == nil {
@@ -154,6 +180,17 @@ func (r *repl) handleCommand(ctx context.Context, cmd string) error {
 	args := ""
 	if len(parts) > 1 {
 		args = strings.Join(parts[1:], " ")
+	}
+
+	// Dynamic skill command dispatch — check registered skill aliases first
+	if strings.HasPrefix(name, "/") {
+		cmdName := strings.TrimPrefix(name, "/")
+		if sk := skill.GetByCommand(cmdName); sk != nil {
+			return r.runSkill(ctx, sk, args)
+		}
+		if sk := skill.Get(cmdName); sk != nil {
+			return r.runSkill(ctx, sk, args)
+		}
 	}
 
 	switch name {
