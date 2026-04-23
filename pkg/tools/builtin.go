@@ -129,29 +129,32 @@ var memorySchema = map[string]any{
 	"parameters": map[string]any{
 		"type": "object",
 		"properties": map[string]any{
-			"action": map[string]any{
-				"type":        "string",
-				"description": "Action: add, replace, remove, snapshot, freeze, show",
-				"enum":        []any{"add", "replace", "remove", "snapshot", "freeze", "show"},
-			},
-			"target": map[string]any{
-				"type":        "string",
-				"description": "memory (default) or user",
-				"default":     "memory",
-			},
-			"content": map[string]any{
-				"type":        "string",
-				"description": "Content for add/replace actions",
-			},
-			"old_text": map[string]any{
-				"type":        "string",
-				"description": "Exact text to replace or remove (for replace/remove)",
-			},
-			"depth": map[string]any{
-				"type":        "number",
-				"description": "Snapshot depth (lines per entry, default 3)",
-				"default":     3,
-			},
+			"action": map[string]any{"type": "string", "enum": []any{"add", "replace", "remove", "snapshot", "freeze", "show"}},
+			"target": map[string]any{"type": "string", "enum": []any{"memory", "user"}, "default": "memory"},
+			"content":   map[string]any{"type": "string", "description": "Content for add/replace"},
+			"old_text":  map[string]any{"type": "string", "description": "Exact substring to replace or remove"},
+			"depth":     map[string]any{"type": "number", "description": "Snapshot depth (1-3, default 1)"},
+		},
+		"required": []any{"action"},
+	},
+}
+
+var cronSchema = map[string]any{
+	"name":        "cronjob",
+	"description": "Manage scheduled cron jobs — create, list, get, remove, pause, resume, or run a job immediately.",
+	"parameters": map[string]any{
+		"type": "object",
+		"properties": map[string]any{
+			"action":   map[string]any{"type": "string", "enum": []any{"create", "list", "get", "remove", "pause", "resume", "run"}},
+			"id":       map[string]any{"type": "string", "description": "Job ID (for get/remove/pause/resume/run)"},
+			"prompt":   map[string]any{"type": "string", "description": "Task prompt (for create)"},
+			"schedule": map[string]any{"type": "string", "description": "Schedule: 30m, every 2h, 0 9 * * *, 2026-02-03T14:00 (for create)"},
+			"name":     map[string]any{"type": "string", "description": "Friendly job name (for create)"},
+			"deliver":  map[string]any{"type": "string", "description": "Delivery: origin, local, or platform:chat_id (for create)"},
+			"repeat":    map[string]any{"type": "number", "description": "Max repeat count (for create, nil=forever)"},
+			"skills":    map[string]any{"type": "array", "items": map[string]any{"type": "string"}, "description": "Skills to load (for create)"},
+			"enabled":   map[string]any{"type": "boolean", "description": "Filter by enabled state (for list)"},
+			"state":     map[string]any{"type": "string", "description": "Filter by state (for list)"},
 		},
 		"required": []any{"action"},
 	},
@@ -748,6 +751,18 @@ func init() {
 		false,
 		"Manage agent memory — add/replace/remove/show entries in MEMORY.md or USER.md",
 		"🧠",
+	)
+
+	Register(
+		"cronjob",
+		"builtin",
+		cronSchema,
+		cronToolHandler,
+		nil,
+		nil,
+		false,
+		"Manage scheduled cron jobs — create/list/get/remove/pause/resume/run",
+		"⏰",
 	)
 }
 
