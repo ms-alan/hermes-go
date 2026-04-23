@@ -113,17 +113,26 @@ func (a *AIAgent) RunWithMessages(ctx context.Context, messages []*model.Message
 
 		// Check for tool calls
 		if len(assistantMsg.ToolCalls) > 0 {
-			a.logger.Info("tool calls detected", "count", len(assistantMsg.ToolCalls))
+		a.logger.Info("tool calls detected", "count", len(assistantMsg.ToolCalls))
 
 			for _, tc := range assistantMsg.ToolCalls {
 				toolName := tc.Function.Name
-				args := string(tc.Function.Arguments)
+				rawArgs := string(tc.Function.Arguments)
 
 				// Parse arguments into a map
 				var argsMap map[string]any
-				if err := json.Unmarshal([]byte(args), &argsMap); err != nil {
-					a.logger.Warn("failed to parse tool arguments", "tool", toolName, "error", err)
-					argsMap = nil
+				if err := json.Unmarshal([]byte(rawArgs), &argsMap); err != nil {
+					// Double-encoded: raw message itself is a JSON string, decode twice
+					var argsStr string
+					if err2 := json.Unmarshal([]byte(rawArgs), &argsStr); err2 == nil {
+						if err3 := json.Unmarshal([]byte(argsStr), &argsMap); err3 != nil {
+							a.logger.Warn("failed to parse tool arguments (double-decode)", "tool", toolName, "error", err3)
+							argsMap = nil
+						}
+					} else {
+						a.logger.Warn("failed to parse tool arguments", "tool", toolName, "error", err)
+						argsMap = nil
+					}
 				}
 
 				toolReq := &model.ToolCallRequest{
@@ -142,6 +151,7 @@ func (a *AIAgent) RunWithMessages(ctx context.Context, messages []*model.Message
 				messages = append(messages, &model.Message{
 					Role:       model.RoleTool,
 					ToolCallID: tc.ID,
+					Name:       toolName,
 					Content:    toolResult.Content,
 				})
 			}
@@ -208,17 +218,26 @@ func (a *AIAgent) RunConversation(ctx context.Context, userMessage string, syste
 
 		// Check for tool calls
 		if len(assistantMsg.ToolCalls) > 0 {
-			a.logger.Info("tool calls detected", "count", len(assistantMsg.ToolCalls))
+		a.logger.Info("tool calls detected", "count", len(assistantMsg.ToolCalls))
 
 			for _, tc := range assistantMsg.ToolCalls {
 				toolName := tc.Function.Name
-				args := string(tc.Function.Arguments)
+				rawArgs := string(tc.Function.Arguments)
 
 				// Parse arguments into a map
 				var argsMap map[string]any
-				if err := json.Unmarshal([]byte(args), &argsMap); err != nil {
-					a.logger.Warn("failed to parse tool arguments", "tool", toolName, "error", err)
-					argsMap = nil
+				if err := json.Unmarshal([]byte(rawArgs), &argsMap); err != nil {
+					// Double-encoded: raw message itself is a JSON string, decode twice
+					var argsStr string
+					if err2 := json.Unmarshal([]byte(rawArgs), &argsStr); err2 == nil {
+						if err3 := json.Unmarshal([]byte(argsStr), &argsMap); err3 != nil {
+							a.logger.Warn("failed to parse tool arguments (double-decode)", "tool", toolName, "error", err3)
+							argsMap = nil
+						}
+					} else {
+						a.logger.Warn("failed to parse tool arguments", "tool", toolName, "error", err)
+						argsMap = nil
+					}
 				}
 
 				toolReq := &model.ToolCallRequest{
@@ -237,6 +256,7 @@ func (a *AIAgent) RunConversation(ctx context.Context, userMessage string, syste
 				messages = append(messages, &model.Message{
 					Role:       model.RoleTool,
 					ToolCallID: tc.ID,
+					Name:       toolName,
 					Content:    toolResult.Content,
 				})
 			}
