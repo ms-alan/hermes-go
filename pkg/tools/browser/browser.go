@@ -4,6 +4,7 @@ package browser
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log/slog"
 	"os"
@@ -288,6 +289,55 @@ func (m *Manager) Screenshot(ctx context.Context) (string, error) {
 		return "", fmt.Errorf("save screenshot: %w", err)
 	}
 	return tmp, nil
+}
+
+// GetImages returns all images on the current page (src, alt, width, height).
+func (m *Manager) GetImages(ctx context.Context) (string, error) {
+	tabCtx, cancel := m.getTabCtx()
+	if tabCtx == nil {
+		return "", fmt.Errorf("no active tab")
+	}
+	defer cancel()
+
+	var jsonStr string
+	jsCode := `JSON.stringify([...document.images].map(img => ({
+		src: img.src, alt: img.alt || '',
+		width: img.naturalWidth, height: img.naturalHeight
+	})).filter(img => img.src && !img.src.startsWith('data:')))`
+	if err := chromedp.Run(tabCtx,
+		chromedp.Sleep(300*time.Millisecond),
+		chromedp.Evaluate(jsCode, &jsonStr),
+	); err != nil {
+		return "", fmt.Errorf("get images: %w", err)
+	}
+
+	var images []map[string]any
+	if err := json.Unmarshal([]byte(jsonStr), &images); err != nil {
+		return jsonStr, nil // return raw JSON on parse failure
+	}
+	return jsonStr, nil
+}
+
+// EvaluateJS runs arbitrary JavaScript in the page context and returns the result.
+func (m *Manager) EvaluateJS(ctx context.Context, expression string) (string, error) {
+	tabCtx, cancel := m.getTabCtx()
+	if tabCtx == nil {
+		return "", fmt.Errorf("no active tab")
+	}
+	defer cancel()
+
+	var result any
+	if err := chromedp.Run(tabCtx,
+		chromedp.Sleep(200*time.Millisecond),
+		chromedp.Evaluate(expression, &result),
+	); err != nil {
+		return "", fmt.Errorf("evaluate js: %w", err)
+	}
+	out, err := json.Marshal(result)
+	if err != nil {
+		return fmt.Sprintf("%v", result), nil
+	}
+	return string(out), nil
 }
 
 // ---------------------------------------------------------------------------

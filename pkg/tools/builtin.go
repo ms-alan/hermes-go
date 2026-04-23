@@ -982,6 +982,30 @@ func init() {
 	)
 
 	Register(
+		"browser_get_images",
+		"builtin",
+		browserGetImagesSchema,
+		browserGetImagesHandler,
+		nil,
+		nil,
+		false,
+		"Get all images on the current page with URLs and alt text",
+		"🖼️",
+	)
+
+	Register(
+		"browser_console",
+		"builtin",
+		browserConsoleSchema,
+		browserConsoleHandler,
+		nil,
+		nil,
+		false,
+		"Evaluate JavaScript in the page context or get page snapshot",
+		"💻",
+	)
+
+	Register(
 		"execute_code",
 		"builtin",
 		CodeExecutionSchema,
@@ -1051,6 +1075,18 @@ func init() {
 		false,
 		"View full skill metadata (tier 2) or linked file content (tier 3)",
 		"🔍",
+	)
+
+	Register(
+		"delegate_task",
+		"builtin",
+		delegateTaskSchema,
+		delegateTaskHandler,
+		nil,
+		nil,
+		false,
+		"Spawn autonomous sub-agents to handle tasks in parallel",
+		"🤖",
 	)
 }
 

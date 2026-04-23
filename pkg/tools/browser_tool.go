@@ -197,3 +197,71 @@ func browserPressHandler(args map[string]any) string {
 func CloseBrowser() {
 	browserManager.Close()
 }
+
+// ---------------------------------------------------------------------------
+// browser_get_images
+// ---------------------------------------------------------------------------
+
+var browserGetImagesSchema = map[string]any{
+	"name":        "browser_get_images",
+	"description": "Get a list of all images on the current page with their URLs and alt text. Useful for finding images to analyze with the vision tool. Requires browser_navigate to be called first.",
+	"parameters": map[string]any{
+		"type": "object",
+		"properties": map[string]any{},
+	},
+}
+
+func browserGetImagesHandler(args map[string]any) string {
+	ctx := context.Background()
+	jsonStr, err := browserManager.GetImages(ctx)
+	if err != nil {
+		return toolError(fmt.Sprintf("get images failed: %v", err))
+	}
+	return toolResultData(map[string]any{
+		"images": jsonStr,
+	})
+}
+
+// ---------------------------------------------------------------------------
+// browser_console
+// ---------------------------------------------------------------------------
+
+var browserConsoleSchema = map[string]any{
+	"name":        "browser_console",
+	"description": "Evaluate JavaScript in the page context — use for DOM inspection, reading page state, or extracting data programmatically. Also accepts no expression to return basic info. Requires browser_navigate to be called first.",
+	"parameters": map[string]any{
+		"type": "object",
+		"properties": map[string]any{
+			"expression": map[string]any{
+				"type":        "string",
+				"description": "JavaScript expression to evaluate. Example: 'document.title' or 'document.querySelectorAll(\"a\").length'",
+			},
+		},
+	},
+}
+
+func browserConsoleHandler(args map[string]any) string {
+	ctx := context.Background()
+	expression, _ := args["expression"].(string)
+
+	// If no expression, return a simple page info summary
+	if expression == "" {
+		summary, err := browserManager.Snapshot(ctx)
+		if err != nil {
+			return toolError(fmt.Sprintf("snapshot failed: %v", err))
+		}
+		return toolResultData(map[string]any{
+			"message": "No expression provided. Page snapshot above.",
+			"snapshot": summary,
+		})
+	}
+
+	result, err := browserManager.EvaluateJS(ctx, expression)
+	if err != nil {
+		return toolError(fmt.Sprintf("evaluate failed: %v", err))
+	}
+	return toolResultData(map[string]any{
+		"expression": expression,
+		"result":     result,
+	})
+}
