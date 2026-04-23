@@ -115,16 +115,19 @@ type StdioServerParameters struct {
 
 // MCPServerConfig describes a configured MCP server.
 type MCPServerConfig struct {
-	Name           string                 `json:"name"`
-	Transport      string                 `json:"transport"` // "stdio" or "http"
-	Command        string                 `json:"command,omitempty"`
-	Args           []string               `json:"args,omitempty"`
-	Env            map[string]string      `json:"env,omitempty"`
-	URL            string                 `json:"url,omitempty"`
-	Headers        map[string]string      `json:"headers,omitempty"`
-	Timeout        int                    `json:"timeout,omitempty"`
-	ConnectTimeout int                    `json:"connectTimeout,omitempty"`
-	Disabled       bool                   `json:"disabled,omitempty"`
+	Name           string            `json:"name"`
+	Transport      string            `json:"transport"` // "stdio", "http", or "sse"
+	Command        string            `json:"command,omitempty"`
+	Args           []string          `json:"args,omitempty"`
+	Env            map[string]string `json:"env,omitempty"`
+	URL            string            `json:"url,omitempty"`
+	Headers        map[string]string `json:"headers,omitempty"`
+	Timeout        int               `json:"timeout,omitempty"`
+	ConnectTimeout int               `json:"connectTimeout,omitempty"`
+	Disabled       bool              `json:"disabled,omitempty"`
+	// SSE-specific paths (used when Transport == "sse")
+	SSEPath   string `json:"ssePath,omitempty"`   // endpoint for SSE subscription (default "/sse")
+	HTTPPath  string `json:"httpPath,omitempty"`  // endpoint for HTTP POST requests (default "/mcp")
 }
 
 // MCPConfig is the top-level MCP configuration.

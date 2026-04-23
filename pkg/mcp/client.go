@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"os"
 	"os/exec"
@@ -284,6 +285,15 @@ func (c *Client) ConnectServer(cfg MCPServerConfig) error {
 	switch cfg.Transport {
 	case "http", "https":
 		transport = NewHTTPTransport(cfg.URL, cfg.Headers, cfg.ConnectTimeout)
+	case "sse":
+		sseTransport := NewSSETransport(cfg.URL, cfg.SSEPath, cfg.HTTPPath, cfg.Headers)
+		transport = sseTransport
+		// Start SSE subscription for server-initiated notifications
+		go func() {
+			if err := sseTransport.Subscribe(context.Background()); err != nil {
+				slog.Warn("MCP SSE subscription failed", "server", cfg.Name, "err", err)
+			}
+		}()
 	default: // "stdio" or empty
 		transport, err = NewStdioTransport(StdioServerParameters{
 			Command: cfg.Command,
