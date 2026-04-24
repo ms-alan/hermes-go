@@ -1134,6 +1134,18 @@ func init() {
 		"Check OpenRouter API key status and available models",
 		"🔑",
 	)
+
+	Register(
+		"xai_status",
+		"builtin",
+		xaiHttpSchema,
+		xaiHttpHandler,
+		nil,
+		nil,
+		false,
+		"Check xAI (Grok) API availability and configuration",
+		"🤖",
+	)
 }
 
 // ---------------------------------------------------------------------------
