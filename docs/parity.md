@@ -53,12 +53,10 @@ Green = implemented, Yellow = partial, Red = not yet.
 
 ---
 
-## Not Yet Implemented ❌
+## Notes
 
-| Feature | Python File | Priority | Notes |
-|---------|------------|----------|-------|
-| **TUI / Interactive Overlay** | `agent/display/` | Low | Rich terminal UI with subagent progress, spinner, color (React/Ink; hermes-go provides JSON-RPC backend + REPL /delegation) |
-| **authorization / dangerous command detection** | `tools/authorize.py` | Low | Confirms before rm -rf, git push --force, etc. |
+- **TUI / Interactive Overlay**: hermes-go does **not** implement a TUI frontend. Instead, it provides a JSON-RPC 2.0 stdio server (`pkg/tui_rpc/` + `cmd/tui_rpc/`) that speaks the same protocol as the Python gateway, enabling any TUI frontend (React/Ink, etc.) to connect as a client. The REPL `/delegation` command covers interactive delegation control natively.
+- **authorization / dangerous command detection**: implemented in `pkg/tools/approval.go` — 13 dangerous command regexes, sensitive path patterns, per-session allowlist, `Authorize()` wired into bash/terminal/file_write/file_delete. `AuthorizeWithPrompt()` provides the REPL integration hook.
 
 ---
 
