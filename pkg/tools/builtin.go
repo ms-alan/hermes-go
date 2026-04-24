@@ -1098,6 +1098,18 @@ func init() {
 		"Search past conversation sessions with full-text search — omit query to list recent sessions",
 		"🔍",
 	)
+
+	Register(
+		"rl_training",
+		"builtin",
+		rlTrainingSchema,
+		rlTrainingHandler,
+		nil,
+		nil,
+		false,
+		"Manage RL training runs via Tinker-Atropos (GRPO) — requires tinker-atropos submodule",
+		"🎓",
+	)
 }
 
 // ---------------------------------------------------------------------------
