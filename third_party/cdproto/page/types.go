@@ -683,14 +683,15 @@ func (t ClientNavigationReason) String() string {
 
 // ClientNavigationReason values.
 const (
-	ClientNavigationReasonFormSubmissionGet     ClientNavigationReason = "formSubmissionGet"
-	ClientNavigationReasonFormSubmissionPost    ClientNavigationReason = "formSubmissionPost"
-	ClientNavigationReasonHTTPHeaderRefresh     ClientNavigationReason = "httpHeaderRefresh"
-	ClientNavigationReasonScriptInitiated       ClientNavigationReason = "scriptInitiated"
-	ClientNavigationReasonMetaTagRefresh        ClientNavigationReason = "metaTagRefresh"
+	ClientNavigationReasonFormSubmissionGet      ClientNavigationReason = "formSubmissionGet"
+	ClientNavigationReasonFormSubmissionPost     ClientNavigationReason = "formSubmissionPost"
+	ClientNavigationReasonHTTPHeaderRefresh      ClientNavigationReason = "httpHeaderRefresh"
+	ClientNavigationReasonScriptInitiated        ClientNavigationReason = "scriptInitiated"
+	ClientNavigationReasonMetaTagRefresh         ClientNavigationReason = "metaTagRefresh"
 	ClientNavigationReasonPageBlockInterstitial ClientNavigationReason = "pageBlockInterstitial"
-	ClientNavigationReasonReload                ClientNavigationReason = "reload"
-	ClientNavigationReasonAnchorClick           ClientNavigationReason = "anchorClick"
+	ClientNavigationReasonReload                 ClientNavigationReason = "reload"
+	ClientNavigationReasonAnchorClick            ClientNavigationReason = "anchorClick"
+	ClientNavigationReasonInitialFrameNavigation ClientNavigationReason = "initialFrameNavigation" // Chrome 130+
 )
 
 // MarshalEasyJSON satisfies easyjson.Marshaler.
@@ -723,6 +724,8 @@ func (t *ClientNavigationReason) UnmarshalEasyJSON(in *jlexer.Lexer) {
 		*t = ClientNavigationReasonReload
 	case ClientNavigationReasonAnchorClick:
 		*t = ClientNavigationReasonAnchorClick
+	case ClientNavigationReasonInitialFrameNavigation:
+		*t = ClientNavigationReasonInitialFrameNavigation
 
 	default:
 		in.AddError(fmt.Errorf("unknown ClientNavigationReason value: %v", v))
