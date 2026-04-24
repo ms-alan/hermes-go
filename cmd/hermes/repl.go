@@ -307,6 +307,8 @@ func (r *repl) handleCommand(ctx context.Context, cmd string) error {
 				fmt.Printf("  [%s] %s: %s\n", res.SessionID, res.Role, res.Snippet)
 			}
 		}
+	case "/delegation":
+		return r.handleDelegation(args)
 	case "/exit", "/quit":
 		fmt.Println("Goodbye!")
 		os.Exit(0)
@@ -319,6 +321,59 @@ func (r *repl) handleCommand(ctx context.Context, cmd string) error {
 	return nil
 }
 
+func (r *repl) handleDelegation(args string) error {
+	parts := strings.Fields(args)
+	subCmd := ""
+	if len(parts) > 0 {
+		subCmd = parts[0]
+	}
+
+	switch subCmd {
+	case "status":
+		r.printDelegationStatus()
+	case "pause":
+		agent.SetSpawnPaused(true)
+		fmt.Printf("Delegation paused: %v\n", agent.IsSpawnPaused())
+	case "resume":
+		agent.SetSpawnPaused(false)
+		fmt.Printf("Delegation paused: %v\n", agent.IsSpawnPaused())
+	case "interrupt":
+		if len(parts) < 2 {
+			return fmt.Errorf("usage: /delegation interrupt <subagent-id>")
+		}
+		subagentID := parts[1]
+		ok := agent.InterruptSubagent(subagentID)
+		fmt.Printf("Interrupt %s: %v\n", subagentID, ok)
+	case "":
+		fmt.Println("Usage: /delegation <status|pause|resume|interrupt>")
+		fmt.Println("  status    - Show delegation state and active subagents")
+		fmt.Println("  pause     - Pause new subagent spawning")
+		fmt.Println("  resume    - Resume subagent spawning")
+		fmt.Println("  interrupt <id> - Interrupt a specific subagent")
+	default:
+		return fmt.Errorf("unknown delegation subcommand: %q (status|pause|resume|interrupt)", subCmd)
+	}
+	return nil
+}
+
+func (r *repl) printDelegationStatus() {
+	subagents := agent.ListActiveSubagents()
+	paused := agent.IsSpawnPaused()
+
+	fmt.Printf("Delegation paused: %v\n", paused)
+	fmt.Printf("Active subagents: %d\n", len(subagents))
+
+	if len(subagents) == 0 {
+		fmt.Println("  (none)")
+		return
+	}
+
+	for _, s := range subagents {
+		fmt.Printf("  [%s] depth=%d goal=%q status=%s tools=%d last=%s\n",
+			s.SubagentID, s.Depth, s.Goal, s.Status, s.ToolCount, s.LastTool)
+	}
+}
+
 func (r *repl) printHelp() {
 	fmt.Println("Available commands:")
 	fmt.Println("  /help     - Show this help message")
@@ -326,6 +381,7 @@ func (r *repl) printHelp() {
 	fmt.Println("  /sessions - List active sessions")
 	fmt.Println("  /skills   - Show skillsets and loaded skills")
 	fmt.Println("  /cron     - Manage cron jobs (/cron help for subcommands)")
+	fmt.Println("  /delegation - Control delegation (status/pause/resume/interrupt)")
 	fmt.Println("  /new      - Start a new session")
 	fmt.Println("  /switch   - Switch to a session (/switch <session-id>)")
 	fmt.Println("  /search   - Search session messages (/search <query>)")
