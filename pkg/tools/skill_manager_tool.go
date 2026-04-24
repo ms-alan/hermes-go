@@ -11,8 +11,8 @@ import (
 )
 
 // skillManagerSchema defines the skill management tool.
-var skillManagerSchema = map[string]any{
-	"name":        "skill_manager",
+var skillManageSchema = map[string]any{
+	"name":        "skill_manage",
 	"description": "Create, edit, patch, and delete skills — turning successful approaches into reusable procedural knowledge. Skills capture how to do a specific type of task. User skills live in ~/.hermes/skills/. Actions: create (new skill with SKILL.md), edit (replace SKILL.md), patch (find-replace), delete (remove skill), write_file (add supporting file), remove_file (delete supporting file).",
 	"parameters": map[string]any{
 		"type": "object",
@@ -57,7 +57,7 @@ var skillManagerSchema = map[string]any{
 
 var validNameRe = regexp.MustCompile(`^[a-z0-9][a-z0-9._-]*$`)
 
-func skillManagerHandler(args map[string]any) string {
+func skillManageHandler(args map[string]any) string {
 	action, _ := args["action"].(string)
 
 	switch action {

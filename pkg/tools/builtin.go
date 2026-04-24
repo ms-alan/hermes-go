@@ -716,6 +716,9 @@ func init() {
 	Register("skill_view", "skills", skillViewSchema, skillViewHandler, nil, nil, false,
 		"View full skill metadata (tier 2) or linked file content (tier 3)", "🔍")
 
+	Register("skill_manage", "skills", skillManageSchema, skillManageHandler, nil, nil, false,
+		"Create, edit, patch, delete skills — manage ~/.hermes/skills/", "🛠️")
+
 	// -------------------------------------------------------------------------
 	// browser tools
 	Register("browser_navigate", "browser", browserNavigateSchema, browserNavigateHandler, nil, nil, false,
