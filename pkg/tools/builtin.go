@@ -753,8 +753,7 @@ func init() {
 	Register("vision_analyze", "vision", visionSchema, visionAnalyzeHandler, nil, nil, false,
 		"Use vision to analyze an image or screenshot", "👁️")
 
-	Register("image_generate", "image_gen", imageGenerateSchema, imageGenerateHandler, nil, nil, false,
-		"Generate images from text prompts via MiniMax image API", "🎨")
+	// image_generate registered in pkg/tools/image_gen_tool.go (FAL.ai)
 
 	// -------------------------------------------------------------------------
 	// audio tools
