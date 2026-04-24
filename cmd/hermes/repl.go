@@ -24,7 +24,7 @@ type repl struct {
 	sessionAgent   *agent.SessionAgent
 	store          *session.Store
 	ctxMgr         *hermescontext.Manager
-	memStore       *hermesmemory.MemoryStore
+	memMgr         *hermesmemory.MemoryManager
 	ctxLoader      *hermescontext.Loader
 	logger         *slog.Logger
 	modelClient    model.LLMClient
@@ -99,12 +99,20 @@ func newREPL(agentCfg agent.Config, store *session.Store, logger *slog.Logger, m
 	}
 	hermesmemory.SetMemoryStore(memStore)
 
+	// Create memory manager with built-in provider
+	memMgr := hermesmemory.NewMemoryManager()
+	memMgr.SetLogger(logger)
+	memMgr.WithBuiltinProvider(memStore)
+	if err := memMgr.InitializeAll("", "", map[string]any{"platform": "cli"}); err != nil {
+		fmt.Fprintf(os.Stderr, "Warning: failed to initialize memory manager: %v\n", err)
+	}
+
 	// Create context file loader (hermesHome defaults to ~/.hermes, cwd for project context)
 	cwd, _ := os.Getwd()
 	ctxLoader := hermescontext.NewLoader("", cwd)
 
 	// Build system prompt from SOUL.md and memory
-	systemPrompt := buildSystemPrompt(ctxLoader, memStore)
+	systemPrompt := buildSystemPrompt(ctxLoader, memMgr)
 
 	// Create AIAgent
 	aiAgent := agent.NewAIAgent(modelClient, agentCfg)
@@ -117,7 +125,7 @@ func newREPL(agentCfg agent.Config, store *session.Store, logger *slog.Logger, m
 	aiAgent.SyncToolsToConfig()
 
 	// Create SessionAgent
-	sessionAgent := agent.NewSessionAgent(aiAgent, store, ctxMgr, logger)
+	sessionAgent := agent.NewSessionAgent(aiAgent, store, ctxMgr, memMgr, logger)
 
 	// Initialize cron scheduler (store + runner + nil deliverer for CLI)
 	cronScheduler := initCronScheduler(sessionAgent, logger)
@@ -126,7 +134,7 @@ func newREPL(agentCfg agent.Config, store *session.Store, logger *slog.Logger, m
 		sessionAgent:   sessionAgent,
 		store:         store,
 		ctxMgr:        ctxMgr,
-		memStore:      memStore,
+		memMgr:        memMgr,
 		ctxLoader:     ctxLoader,
 		logger:        logger,
 		modelClient:   modelClient,
@@ -286,7 +294,7 @@ func (r *repl) handleCommand(ctx context.Context, cmd string) error {
 }
 
 // buildSystemPrompt assembles the initial system prompt from SOUL.md, memory, and project context.
-func buildSystemPrompt(ctxLoader *hermescontext.Loader, memStore *hermesmemory.MemoryStore) string {
+func buildSystemPrompt(ctxLoader *hermescontext.Loader, memMgr *hermesmemory.MemoryManager) string {
 	var parts []string
 
 	// Slot #1: SOUL.md — agent identity
@@ -294,14 +302,12 @@ func buildSystemPrompt(ctxLoader *hermescontext.Loader, memStore *hermesmemory.M
 		parts = append(parts, soul)
 	}
 
-	// Memory snapshot
-	if memStore != nil {
-		memBlock, userBlock := memStore.FrozenSnapshot()
-		if memBlock != "" {
-			parts = append(parts, memBlock)
-		}
-		if userBlock != "" {
-			parts = append(parts, userBlock)
+	// Memory snapshot from built-in provider
+	if memMgr != nil {
+		if bp := memMgr.GetProvider("builtin"); bp != nil {
+			if block := bp.SystemPromptBlock(); block != "" {
+				parts = append(parts, block)
+			}
 		}
 	}
 

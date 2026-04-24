@@ -16,16 +16,19 @@ import (
 
 // SessionAgent wraps an AIAgent with session persistence and context management.
 type SessionAgent struct {
-	agent    *AIAgent
-	store    *session.Store
-	ctxMgr   *ctxmgr.Manager
-	logger   *slog.Logger
-	sessID   string
-	sessInfo *session.Session
+	agent      *AIAgent
+	store      *session.Store
+	ctxMgr     *ctxmgr.Manager
+	memMgr     *memory.MemoryManager
+	logger     *slog.Logger
+	sessID     string
+	sessInfo   *session.Session
+	turnCount  int // increments each Chat call, used for OnTurnStart
 }
 
 // NewSessionAgent creates a new SessionAgent with the given components.
-func NewSessionAgent(agent *AIAgent, store *session.Store, ctxMgr *ctxmgr.Manager, logger *slog.Logger) *SessionAgent {
+// If memMgr is nil, memory features are disabled (graceful degradation).
+func NewSessionAgent(agent *AIAgent, store *session.Store, ctxMgr *ctxmgr.Manager, memMgr *memory.MemoryManager, logger *slog.Logger) *SessionAgent {
 	if logger == nil {
 		logger = slog.Default()
 	}
@@ -33,6 +36,7 @@ func NewSessionAgent(agent *AIAgent, store *session.Store, ctxMgr *ctxmgr.Manage
 		agent:  agent,
 		store:  store,
 		ctxMgr: ctxMgr,
+		memMgr: memMgr,
 		logger: logger,
 	}
 }
@@ -40,13 +44,25 @@ func NewSessionAgent(agent *AIAgent, store *session.Store, ctxMgr *ctxmgr.Manage
 // Chat processes a user message within the current session.
 // It adds the user message to the context manager, runs the agent,
 // and persists all messages to the session store.
+//
+// Memory lifecycle (per turn):
+//   - OnTurnStart → inject prefetch context → RunWithMessages → SyncAll → QueuePrefetchAll
 func (sa *SessionAgent) Chat(ctx context.Context, userMsg string) (string, error) {
 	if sa.sessID == "" {
 		return "", fmt.Errorf("no active session: use New() or Switch() first")
 	}
 
+	sa.turnCount++
+
 	// Add user message to context manager
 	sa.ctxMgr.AddMessage(model.UserMessage(userMsg))
+
+	// Notify memory providers of turn start
+	if sa.memMgr != nil {
+		sa.memMgr.OnTurnStart(sa.turnCount, userMsg, map[string]any{
+			"platform": "cli",
+		})
+	}
 
 	// Get messages for LLM (may trigger compression)
 	msgsForLLM, compressed, err := sa.ctxMgr.GetMessagesForLLM(ctx)
@@ -58,13 +74,41 @@ func (sa *SessionAgent) Chat(ctx context.Context, userMsg string) (string, error
 
 	if compressed {
 		sa.logger.Info("context was compressed before LLM call")
+		// Notify memory providers before compression
+		if sa.memMgr != nil {
+			sa.notifyPreCompress()
+		}
 	}
 
 	// Build system prompt: stored prompt + memory snapshot
 	systemPrompt := sa.buildSystemPrompt()
+
+	// Inject prefetch context from memory providers (after system prompt, before user message)
+	// This adds a <memory-context> block with recalled memories
+	if sa.memMgr != nil {
+		prefetch := sa.memMgr.PrefetchAll(userMsg, sa.sessID)
+		if prefetch != "" {
+			memContext := memory.BuildMemoryContextBlock(prefetch)
+			// Prepend to the last user message for this turn
+			if len(msgsForLLM) > 0 && msgsForLLM[len(msgsForLLM)-1].Role == model.RoleUser {
+				lastUser := msgsForLLM[len(msgsForLLM)-1]
+				lastUser.Content = memContext + "\n\n" + lastUser.Content
+			}
+		}
+	}
+
 	result := sa.agent.RunWithMessages(ctx, msgsForLLM, systemPrompt)
 	if result.Error != nil {
 		return "", result.Error
+	}
+
+	// Sync turn to memory providers
+	if sa.memMgr != nil {
+		// Collect user and assistant content from this turn
+		userContent := userMsg
+		assistantContent := result.FinalResponse
+		sa.memMgr.SyncAll(userContent, assistantContent, sa.sessID)
+		sa.memMgr.QueuePrefetchAll(userMsg, sa.sessID)
 	}
 
 	// Update context manager with the new messages from the result
@@ -83,6 +127,22 @@ func (sa *SessionAgent) Chat(ctx context.Context, userMsg string) (string, error
 	return result.FinalResponse, nil
 }
 
+// notifyPreCompress collects pre-compression summaries from all memory providers.
+// Called when context compression is about to discard messages.
+func (sa *SessionAgent) notifyPreCompress() {
+	if sa.memMgr == nil {
+		return
+	}
+	messages := make([]map[string]any, 0, len(sa.ctxMgr.GetMessages()))
+	for _, m := range sa.ctxMgr.GetMessages() {
+		messages = append(messages, map[string]any{
+			"role":    string(m.Role),
+			"content": m.Content,
+		})
+	}
+	sa.memMgr.OnPreCompress(messages)
+}
+
 // buildSystemPrompt assembles the system prompt from stored prompt + memory snapshot.
 func (sa *SessionAgent) buildSystemPrompt() string {
 	var parts []string
@@ -92,8 +152,14 @@ func (sa *SessionAgent) buildSystemPrompt() string {
 		parts = append(parts, *sa.sessInfo.SystemPrompt)
 	}
 
-	// Memory snapshot (frozen at load time)
-	if memStore := memory.GetMemoryStore(); memStore != nil {
+	// Memory system prompt blocks from all providers
+	if sa.memMgr != nil {
+		memPrompt := sa.memMgr.BuildSystemPrompt()
+		if memPrompt != "" {
+			parts = append(parts, memPrompt)
+		}
+	} else if memStore := memory.GetMemoryStore(); memStore != nil {
+		// Fallback: direct memory store access (for backward compat / nil memMgr)
 		memBlock, userBlock := memStore.FrozenSnapshot()
 		if memBlock != "" {
 			parts = append(parts, memBlock)
@@ -115,6 +181,7 @@ func (sa *SessionAgent) New(source, model string, systemPrompt string) (string, 
 	sa.sessID = sessID
 	sa.ctxMgr.Reset()
 	sa.ctxMgr.SetSessionID(sessID)
+	sa.turnCount = 0
 
 	sess, err := sa.store.GetSession(sessID)
 	if err != nil {
@@ -147,6 +214,7 @@ func (sa *SessionAgent) Switch(sessionID string) error {
 	sa.sessInfo = sess
 	sa.ctxMgr.Reset()
 	sa.ctxMgr.SetSessionID(actualID)
+	sa.turnCount = 0
 
 	// Load existing messages into context manager
 	msgs, err := sa.store.GetMessages(actualID)
@@ -160,6 +228,9 @@ func (sa *SessionAgent) Switch(sessionID string) error {
 			sa.ctxMgr.AddMessage(msg)
 		}
 	}
+
+	// Notify memory providers of session end (for the switched-away session, not applicable)
+	// and start fresh for the new session
 	return nil
 }
 
@@ -191,6 +262,51 @@ func (sa *SessionAgent) Search(query string, limit, offset int) ([]session.Searc
 		Limit:  limit,
 		Offset: offset,
 	})
+}
+
+// MemoryManager returns the memory manager (nil if not configured).
+func (sa *SessionAgent) MemoryManager() *memory.MemoryManager {
+	return sa.memMgr
+}
+
+// OnSessionEnd notifies all memory providers that the session has ended.
+func (sa *SessionAgent) OnSessionEnd() {
+	if sa.memMgr == nil {
+		return
+	}
+	messages := make([]map[string]any, 0, len(sa.ctxMgr.GetMessages()))
+	for _, m := range sa.ctxMgr.GetMessages() {
+		messages = append(messages, map[string]any{
+			"role":    string(m.Role),
+			"content": m.Content,
+		})
+	}
+	sa.memMgr.OnSessionEnd(messages)
+}
+
+// OnDelegation notifies memory providers that a subagent completed.
+// Corresponds to hermes-agent's MemoryManager.on_delegation().
+func (sa *SessionAgent) OnDelegation(task string, result string, childSessionID string) {
+	if sa.memMgr == nil {
+		return
+	}
+	sa.memMgr.OnDelegation(task, result, childSessionID)
+}
+
+// OnMemoryWrite notifies external memory providers when the built-in memory
+// tool writes an entry (add/replace/remove).
+func (sa *SessionAgent) OnMemoryWrite(action string, target string, content string) {
+	if sa.memMgr == nil {
+		return
+	}
+	sa.memMgr.OnMemoryWrite(action, target, content)
+}
+
+// Shutdown gracefully shuts down the session agent and its memory providers.
+func (sa *SessionAgent) Shutdown() {
+	if sa.memMgr != nil {
+		sa.memMgr.ShutdownAll()
+	}
 }
 
 // toStoreMessage converts a model.Message to a session.Message.

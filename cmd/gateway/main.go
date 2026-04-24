@@ -18,6 +18,7 @@ import (
 	"github.com/nousresearch/hermes-go/pkg/cron"
 	"github.com/nousresearch/hermes-go/pkg/gateway"
 	"github.com/nousresearch/hermes-go/pkg/gateway/qqbot"
+	hermesmemory "github.com/nousresearch/hermes-go/pkg/memory"
 	"github.com/nousresearch/hermes-go/pkg/model"
 	"github.com/nousresearch/hermes-go/pkg/session"
 	"github.com/nousresearch/hermes-go/pkg/skill"
@@ -74,6 +75,20 @@ func main() {
 	}
 	defer store.Close()
 
+	// Memory store + manager (same pattern as REPL)
+	memStore := hermesmemory.NewMemoryStore()
+	if err := memStore.Load(); err != nil {
+		logger.Warn("failed to load memory store", "error", err)
+	}
+	hermesmemory.SetMemoryStore(memStore)
+
+	memMgr := hermesmemory.NewMemoryManager()
+	memMgr.SetLogger(logger)
+	memMgr.WithBuiltinProvider(memStore)
+	if err := memMgr.InitializeAll("", "", map[string]any{"platform": "gateway"}); err != nil {
+		logger.Warn("failed to initialize memory manager", "error", err)
+	}
+
 	// Model client — build from config (env vars override)
 	baseURL := cfg.Model.APIBase
 	if baseURL == "" {
@@ -117,7 +132,7 @@ func main() {
 	aiAgent.SyncToolsToConfig()
 
 	// Session agent
-	sessAgent := agent.NewSessionAgent(aiAgent, store, ctxMgr, logger)
+	sessAgent := agent.NewSessionAgent(aiAgent, store, ctxMgr, memMgr, logger)
 
 	// Resume existing session if -session flag provided
 	if *sessionIDFlag != "" {
