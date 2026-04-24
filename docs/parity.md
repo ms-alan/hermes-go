@@ -1,7 +1,7 @@
 # hermes-go Feature Parity with hermes-agent (Python)
 
 > Last updated: 2026-04-24
-> Branch: `main` (commit 93fea96)
+> Branch: `main` (commit 21a381a)
 > Python counterpart: `NousResearch/hermes-agent`
 
 This document tracks the feature gap between hermes-go (Go) and hermes-agent (Python).
@@ -45,9 +45,6 @@ Green = implemented, Yellow = partial, Red = not yet.
 
 | Feature | Status | Notes |
 |---------|--------|-------|
-| **Skill Loader (dynamic)** | ⚠️ partial | `pkg/skill/` — loader.go + registry.go exist, skillsets YAML loading in progress |
-| **Prompt Builder** | ⚠️ none | No dedicated prompt_builder module; system prompts built inline in agent.go |
-| **Graceful Shutdown (gateway)** | ⚠️ partial | Gateway main.go lacks signal handler; REPL graceful shutdown done |
 | **Token Counting** | ⚠️ rough | `pkg/context/token.go` uses character ÷ 4 approximation, not tiktoken |
 | **context_compressor (full)** | ⚠️ partial | Python has `_prune_old_tool_results`, `redact_sensitive_text`, `focus_topic` + 12-section summary template |
 | **delegate_tool (full)** | ⚠️ partial | Missing: orchestrator role, TUI spinner, parent_cb relay, spawn pause, MCP tool preservation |
@@ -65,7 +62,6 @@ Green = implemented, Yellow = partial, Red = not yet.
 | **TUI / Interactive Overlay** | `agent/display/` | Low | Rich terminal UI with subagent progress, spinner, color |
 | **gateway RPCs** | `hermes_cli/gateway_rpc.py` | Low | `delegation.pause`, `delegation.status`, `subagent.interrupt` |
 | **authorization / dangerous command detection** | `tools/authorize.py` | Low | Confirms before rm -rf, git push --force, etc. |
-| **skill dynamic loading (full)** | `tools/skill_loader.py` | Medium | Skills as YAML/JSON files with toolsets; /skills CLI with hot-reload |
 
 ---
 
@@ -81,6 +77,7 @@ pkg/gateway/       # QQBot + platform abstraction
 pkg/mcp/           # MCP transport (Stdio + HTTP + SSE)
 pkg/memory/        # MemoryManager + MemoryProvider plugin arch
 pkg/model/         # OpenAI + MiniMax LLM clients
+pkg/prompt/        # System prompt Builder (slot-based composition)
 pkg/session/       # SQLite session store
 pkg/skill/         # Skill loader + registry
 pkg/terminal/      # Multi-backend terminal (local/docker/ssh/singularity/modal/daytona)
