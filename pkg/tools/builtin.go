@@ -1074,6 +1074,18 @@ func init() {
 		"Send a message to any connected platform (QQ/Telegram/Discord) or list available targets",
 		"✉️",
 	)
+
+	Register(
+		"todo",
+		"builtin",
+		todoSchema,
+		todoHandler,
+		nil,
+		nil,
+		false,
+		"Manage a persistent task list — read with no args, write with todos array (merge=true to update by id)",
+		"📋",
+	)
 }
 
 // ---------------------------------------------------------------------------
