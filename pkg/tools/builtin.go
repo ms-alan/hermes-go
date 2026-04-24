@@ -785,17 +785,6 @@ func init() {
 		"Transcribe audio to text — stub (requires faster-whisper or API keys for OpenAI/Groq/Gemini)", "🎤")
 
 	// -------------------------------------------------------------------------
-	// agent / delegation tools
-	Register("delegate_task", "delegation", delegateTaskSchema, delegateTaskHandler, nil, nil, false,
-		"Spawn autonomous sub-agents to handle tasks in parallel", "🤖")
-
-	Register("mixture_of_agents", "moa", mixtureOfAgentsSchema, mixtureOfAgentsHandler, nil, nil, false,
-		"Solve complex tasks using multiple LLMs — parallel reference models + aggregator synthesis (MoE)", "🧠")
-
-	Register("rl_training", "rl", rlTrainingSchema, rlTrainingHandler, nil, nil, false,
-		"Manage RL training runs via Tinker-Atropos (GRPO) — requires tinker-atropos submodule", "🎓")
-
-	// -------------------------------------------------------------------------
 	// scheduling
 	Register("cronjob", "cronjob", cronSchema, cronToolHandler, nil, nil, false,
 		"Manage scheduled cron jobs — create, list, remove, pause, resume, run", "⏰")
