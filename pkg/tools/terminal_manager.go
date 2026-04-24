@@ -2,6 +2,7 @@ package tools
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/nousresearch/hermes-go/pkg/terminal"
@@ -21,6 +22,11 @@ func runTerminalCommand(args map[string]any) string {
 	command, ok := args["command"].(string)
 	if !ok || command == "" {
 		return toolError("terminal requires a 'command' argument")
+	}
+
+	// Authorization check (approval.go) — scans command for dangerous patterns.
+	if approved, reason := Authorize("terminal", command, ""); !approved {
+		return toolError(fmt.Sprintf("terminal command blocked: %s", reason))
 	}
 
 	backend := "local"

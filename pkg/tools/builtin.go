@@ -18,7 +18,6 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
-	"time"
 )
 
 // ---------------------------------------------------------------------------
@@ -636,91 +635,6 @@ func fileDeleteHandler(args map[string]any) string {
 		"type":      map[bool]string{true: "directory", false: "file"}[info.IsDir()],
 		"recursive": recursive,
 		"success":   true,
-	})
-}
-
-func terminalHandler(args map[string]any) string {
-	command, ok := args["command"].(string)
-	if !ok || command == "" {
-		return toolError("terminal requires a 'command' argument")
-	}
-
-	// Authorization check (approval.go) — scans command for dangerous patterns.
-	if approved, reason := Authorize("terminal", command, ""); !approved {
-		return toolError(fmt.Sprintf("terminal command blocked: %s", reason))
-	}
-
-	timeout := 60
-	if t, ok := args["timeout"].(float64); ok {
-		timeout = int(t)
-	}
-	if timeout < 1 {
-		timeout = 1
-	}
-	if timeout > 600 {
-		timeout = 600
-	}
-
-	cwd := ""
-	if w, ok := args["cwd"].(string); ok {
-		cwd = w
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(timeout)*time.Second)
-	defer cancel()
-
-	var cmd *exec.Cmd
-	if strings.Contains(command, "&&") || strings.Contains(command, "||") || strings.Contains(command, ";") {
-		cmd = exec.CommandContext(ctx, "sh", "-c", command)
-	} else {
-		parts := strings.Fields(command)
-		if len(parts) == 0 {
-			return toolError("empty command")
-		}
-		cmd = exec.CommandContext(ctx, parts[0], parts[1:]...)
-	}
-
-	cmd.Env = os.Environ()
-	if cwd != "" {
-		cmd.Dir = cwd
-	}
-
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-
-	err := cmd.Run()
-	output := stdout.String()
-	if err != nil {
-		output += stderr.String()
-	}
-
-	// Check for context deadline exceeded.
-	if ctx.Err() == context.DeadlineExceeded {
-		return toolError(fmt.Sprintf("command timed out after %d seconds", timeout))
-	}
-
-	if err != nil {
-		exitCode := -1
-		if exitErr, ok := err.(*exec.ExitError); ok {
-			exitCode = exitErr.ExitCode()
-		}
-		return toolResultData(map[string]any{
-			"command":  command,
-			"stdout":   stdout.String(),
-			"stderr":   stderr.String(),
-			"exitCode": exitCode,
-			"error":    err.Error(),
-			"success":  false,
-		})
-	}
-
-	return toolResultData(map[string]any{
-		"command":  command,
-		"stdout":   stdout.String(),
-		"stderr":   stderr.String(),
-		"exitCode": 0,
-		"success":  true,
 	})
 }
 
