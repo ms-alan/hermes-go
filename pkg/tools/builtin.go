@@ -847,6 +847,27 @@ func init() {
 	Register("skill_hub", "skill", skillHubSchema, skillHubHandler, skillHubAvailable,
 		nil, false,
 		"Search and install remote skills from GitHub taps", "🔍")
+
+	// -------------------------------------------------------------------------
+	// homeassistant
+	Register("ha_list_entities", "homeassistant", haListEntitiesSchema, haListEntitiesHandler, hassCheck,
+		[]string{"HASS_TOKEN"}, false,
+		"List HA entities by domain or area", "🏠")
+	Register("ha_get_state", "homeassistant", haGetStateSchema, haGetStateHandler, hassCheck,
+		[]string{"HASS_TOKEN"}, false,
+		"Get HA entity detailed state and attributes", "🏠")
+	Register("ha_list_services", "homeassistant", haListServicesSchema, haListServicesHandler, hassCheck,
+		[]string{"HASS_TOKEN"}, false,
+		"List available HA services per domain", "🏠")
+	Register("ha_call_service", "homeassistant", haCallServiceSchema, haCallServiceHandler, hassCheck,
+		[]string{"HASS_TOKEN"}, false,
+		"Call a HA service to control a device", "🏠")
+
+	// -------------------------------------------------------------------------
+	// discord
+	Register("discord", "discord", discordSchema, discordHandler, discordCheck,
+		[]string{"DISCORD_BOT_TOKEN"}, false,
+		"Discord server introspection and management", "💬")
 }
 
 // ---------------------------------------------------------------------------
