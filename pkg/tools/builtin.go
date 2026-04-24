@@ -1062,6 +1062,18 @@ func init() {
 		"Search file contents with ripgrep (rg) or find files by name — respects .gitignore",
 		"🔎",
 	)
+
+	Register(
+		"send_message",
+		"builtin",
+		sendMessageSchema,
+		sendMessageHandler,
+		nil,
+		nil,
+		false,
+		"Send a message to any connected platform (QQ/Telegram/Discord) or list available targets",
+		"✉️",
+	)
 }
 
 // ---------------------------------------------------------------------------

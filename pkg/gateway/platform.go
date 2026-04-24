@@ -67,3 +67,31 @@ type PlatformAdapter interface {
 type MessageHandler interface {
 	HandleInbound(ctx context.Context, msg *InboundMessage) error
 }
+
+// ------------------------------------------------------------------
+// Global adapter registry — allows tools to send messages via any
+// connected platform without importing platform-specific packages.
+// ------------------------------------------------------------------
+
+// adapterRegistry is the global registry of connected platform adapters.
+var adapterRegistry = make(map[Platform]PlatformAdapter)
+
+// RegisterAdapter registers a platform adapter. Idempotent — last
+// registration for a given platform wins.
+func RegisterAdapter(a PlatformAdapter) {
+	adapterRegistry[a.Platform()] = a
+}
+
+// GetAdapter returns the adapter for a given platform, or nil.
+func GetAdapter(p Platform) PlatformAdapter {
+	return adapterRegistry[p]
+}
+
+// ListAdapters returns all registered adapters.
+func ListAdapters() []PlatformAdapter {
+	out := make([]PlatformAdapter, 0, len(adapterRegistry))
+	for _, a := range adapterRegistry {
+		out = append(out, a)
+	}
+	return out
+}

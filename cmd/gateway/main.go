@@ -150,6 +150,7 @@ func main() {
 					logger.Error("QQ connect failed", "error", err)
 				} else {
 					adapters = append(adapters, qqAdapter)
+					gateway.RegisterAdapter(qqAdapter)
 					logger.Info("QQ adapter connected")
 				}
 			}
