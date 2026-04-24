@@ -1,7 +1,7 @@
 # hermes-go Feature Parity with hermes-agent (Python)
 
 > Last updated: 2026-04-24
-> Branch: `main` (commit ab45107)
+> Branch: `main` (commit e61b073)
 > Python counterpart: `NousResearch/hermes-agent`
 
 This document tracks the feature gap between hermes-go (Go) and hermes-agent (Python).
@@ -26,6 +26,7 @@ Green = implemented, Yellow = partial, Red = not yet.
 | **Delegate Tool (Subagents)** | ✅ | `pkg/tools/delegate_tool.go` + `pkg/agent/delegate.go` — single + batch mode, orchestrator role, spawn pause/interrupt, progress callback, maxSpawnDepth |
 | **Skillsets Hub** | ✅ | `pkg/skill/` — loader.go + registry.go + REPL /skills command |
 | **MiniMax Model Client** | ✅ | `pkg/model/minimax.go` — /v1 base URL, double JSON decode fix |
+| **Tool Arg Parsing** | ✅ | `pkg/agent/agent.go` — `parseToolArgs()` helper handles single, double, and triple encoding (max depth 3) |
 | **Config (YAML)** | ✅ | `config.Load()` from `~/.hermes/config.yaml` |
 | **REPL Interface** | ✅ | `cmd/hermes/` — /help, /tools, /sessions, /skills, /new, /switch |
 | **Memory System** | ✅ | `pkg/memory/` — MemoryManager + BuiltinMemoryProvider + pluggable provider arch |
@@ -46,7 +47,6 @@ Green = implemented, Yellow = partial, Red = not yet.
 | Feature | Status | Notes |
 |---------|--------|-------|
 | **Token Counting** | ✅ | `pkg/context/token.go` — tiktoken cl100k_base (same as GPT-4/GPT-3.5), lazy-init with fallback to character heuristic, `CountTokensForModel` per-model encoding support |
-| **Double-JSON Decode** | ⚠️ in agent | `pkg/agent/agent.go` handles double-encoded tool args for MiniMax, not generic |
 
 ---
 
