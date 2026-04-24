@@ -818,6 +818,35 @@ func init() {
 
 	Register("interrupt", "system", interruptSchema, interruptHandler, nil, nil, false,
 		"Signal/clear/check interrupt for cancelling long-running operations", "🛑")
+
+	// -------------------------------------------------------------------------
+	// security
+	Register("osv_check", "security", osvCheckSchema, osvCheckHandler, osvCheckAvailable, nil, false,
+		"Check NPM/PyPI package for malware via OSV API", "🔒")
+
+	// -------------------------------------------------------------------------
+	// feishu
+	Register("feishu_doc_read", "feishu_doc", feishuDocReadSchema, feishuDocReadHandler, feishuCheck,
+		[]string{"FEISHU_APP_ID", "FEISHU_APP_SECRET"}, false,
+		"Read Feishu document content as plain text", "📄")
+	Register("feishu_drive_list_comments", "feishu_drive", feishuDriveListCommentsSchema, feishuDriveListCommentsHandler, feishuCheck,
+		[]string{"FEISHU_APP_ID", "FEISHU_APP_SECRET"}, false,
+		"List comments on a Feishu document", "💬")
+	Register("feishu_drive_list_comment_replies", "feishu_drive", feishuDriveListRepliesSchema, feishuDriveListRepliesHandler, feishuCheck,
+		[]string{"FEISHU_APP_ID", "FEISHU_APP_SECRET"}, false,
+		"List replies in a Feishu document comment thread", "🔁")
+	Register("feishu_drive_reply_comment", "feishu_drive", feishuDriveReplySchema, feishuDriveReplyHandler, feishuCheck,
+		[]string{"FEISHU_APP_ID", "FEISHU_APP_SECRET"}, false,
+		"Reply to a Feishu document comment thread", "↩️")
+	Register("feishu_drive_add_comment", "feishu_drive", feishuDriveAddCommentSchema, feishuDriveAddCommentHandler, feishuCheck,
+		[]string{"FEISHU_APP_ID", "FEISHU_APP_SECRET"}, false,
+		"Add a whole-document comment on a Feishu document", "💬")
+
+	// -------------------------------------------------------------------------
+	// skill
+	Register("skill_hub", "skill", skillHubSchema, skillHubHandler, skillHubAvailable,
+		nil, false,
+		"Search and install remote skills from GitHub taps", "🔍")
 }
 
 // ---------------------------------------------------------------------------
