@@ -47,7 +47,7 @@ Green = implemented, Yellow = partial, Red = not yet.
 |---------|--------|-------|
 | **Token Counting** | ⚠️ rough | `pkg/context/token.go` uses character ÷ 4 approximation, not tiktoken |
 | **context_compressor (full)** | ⚠️ partial | Python has `_prune_old_tool_results`, `redact_sensitive_text`, `focus_topic` + 12-section summary template |
-| **delegate_tool (full)** | ⚠️ partial | Missing: orchestrator role, TUI spinner, parent_cb relay, spawn pause, MCP tool preservation |
+| **delegate_tool (full)** | ✅ | pkg/agent/delegate.go — SetSpawnPaused/IsSpawnPaused, RegisterSubagent/InterruptSubagent/ListActiveSubagents, ProgressCallback, blocked tools strip, orchestrator role with maxSpawnDepth, MCP tool preservation hint, interrupt via context cancel |
 | **mcp_tool (full)** | ⚠️ partial | Missing: HTTP2, reconnection with backoff, sampling support, server-initiated LLM requests |
 | **Double-JSON Decode** | ⚠️ in agent | `pkg/agent/agent.go` handles double-encoded tool args for MiniMax, not generic |
 
