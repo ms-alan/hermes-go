@@ -1,7 +1,7 @@
 # hermes-go Feature Parity with hermes-agent (Python)
 
 > Last updated: 2026-04-24
-> Branch: `main` (commit e594872)
+> Branch: `main` (commit ae1fe2c)
 > Python counterpart: `NousResearch/hermes-agent`
 
 This document tracks the feature gap between hermes-go (Go) and hermes-agent (Python).
@@ -41,6 +41,7 @@ Green = implemented, Yellow = partial, Red = not yet.
 | **gateway QQ Bot** | ✅ | `pkg/gateway/` — PlatformAdapter + QQBot integration |
 | **Linear Integration** | ✅ | `pkg/tools/linear_tool.go` — GraphQL client: list/create/update/search issues, teams, workflow states, labels |
 | **arXiv Search** | ✅ | `pkg/tools/arxiv_tool.go` — arXiv.org API: keyword/author/category search, ID lookup, relevance/date sorting |
+| **gateway RPCs + /delegation** | ✅ | `pkg/tui_rpc/` + `cmd/tui_rpc/` — JSON-RPC 2.0 stdio server: delegation.status/pause, subagent.interrupt; REPL built-in /delegation command (status/pause/resume/interrupt) |
 
 ---
 
@@ -56,8 +57,7 @@ Green = implemented, Yellow = partial, Red = not yet.
 
 | Feature | Python File | Priority | Notes |
 |---------|------------|----------|-------|
-| **TUI / Interactive Overlay** | `agent/display/` | Low | Rich terminal UI with subagent progress, spinner, color |
-| **gateway RPCs** | `hermes_cli/gateway_rpc.py` | Low | `delegation.pause`, `delegation.status`, `subagent.interrupt` |
+| **TUI / Interactive Overlay** | `agent/display/` | Low | Rich terminal UI with subagent progress, spinner, color (React/Ink; hermes-go provides JSON-RPC backend + REPL /delegation) |
 | **authorization / dangerous command detection** | `tools/authorize.py` | Low | Confirms before rm -rf, git push --force, etc. |
 
 ---
