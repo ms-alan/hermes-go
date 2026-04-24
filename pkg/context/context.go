@@ -251,12 +251,13 @@ func (l *Loader) expandSingleRef(ref string) (string, error) {
 		if n > 10 {
 			n = 10
 		}
+		// Show commits with patches (--patch) for review context
 		var out bytes.Buffer
-		cmd := exec.Command("git", "log", fmt.Sprintf("-%d", n), "--no-color", "--oneline")
+		cmd := exec.Command("git", "log", fmt.Sprintf("-%d", n), "--no-color", "--patch")
 		cmd.Stdout = &out
 		cmd.Stderr = io.Discard
 		_ = cmd.Run()
-		return fmt.Sprintf("\n[Git Log %d]\n%s[/Git Log]\n", n, out.String()), nil
+		return fmt.Sprintf("\n[Git Log %d commits with patches]\n%s[/Git Log]\n", n, out.String()), nil
 
 	case RefURL:
 		data, err := fetchURL(path)

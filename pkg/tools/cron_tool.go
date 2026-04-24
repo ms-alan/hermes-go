@@ -22,6 +22,16 @@ func SetCronScheduler(sched *cron.Scheduler) {
 	globalCronScheduler = sched
 }
 
+// CronStore returns the global cron store (nil if not configured).
+func CronStore() *cron.Store {
+	return globalCronStore
+}
+
+// CronScheduler returns the global cron scheduler (nil if not running).
+func CronScheduler() *cron.Scheduler {
+	return globalCronScheduler
+}
+
 // cronToolHandler is registered as the "cronjob" tool.
 func cronToolHandler(args map[string]any) string {
 	action, _ := args["action"].(string)

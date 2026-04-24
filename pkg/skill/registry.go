@@ -72,6 +72,20 @@ func SetLoader(loader *Loader) {
 	defaultLoader = loader
 }
 
+// GetLoader returns the package-level loader.
+func GetLoader() *Loader {
+	return defaultLoader
+}
+
+// ReloadSkills reloads all skills from disk using the default loader.
+// Call this after creating/editing/deleting skills on disk.
+func ReloadSkills() error {
+	if defaultLoader == nil {
+		return nil
+	}
+	return defaultLoader.LoadAll()
+}
+
 // Register registers a skill. Panics if a skill with the same name is already registered.
 func Register(name, description string, commands []string, handler SkillHandler) {
 	skill := &Skill{
