@@ -58,7 +58,7 @@ var (
 
 // mcpServersConfigured returns true if the user has MCP servers configured.
 func mcpServersConfigured() bool {
-	cfg, err := mcp.LoadMCPConfig(os.ExpandEnv("$HOME/.hermes/config.yaml"))
+	cfg, err := mcp.LoadMCPConfig(mcpConfigPath())
 	if err != nil {
 		return false
 	}
@@ -68,7 +68,7 @@ func mcpServersConfigured() bool {
 // initMCPServers loads MCP server configs and starts connections.
 // Safe to call multiple times — idempotent after first success.
 var initMCPServers = sync.OnceFunc(func() {
-	cfg, err := mcp.LoadMCPConfig(os.ExpandEnv("$HOME/.hermes/config.yaml"))
+	cfg, err := mcp.LoadMCPConfig(mcpConfigPath())
 	if err != nil {
 		log.Printf("[mcp] no server config found (this is fine if you have no MCP servers): %v", err)
 		return
@@ -81,6 +81,18 @@ var initMCPServers = sync.OnceFunc(func() {
 		go connectMCPServer(serverCfg)
 	}
 })
+
+// mcpConfigPath returns the expanded path to the MCP config file.
+func mcpConfigPath() string {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		home = os.Getenv("HOME")
+	}
+	if home == "" {
+		home = "/tmp"
+	}
+	return filepath.Join(home, ".hermes", "config.yaml")
+}
 
 // init starts MCP server connections when the package is loaded.
 // MCP servers are registered as tools in the hermes registry automatically.
