@@ -7,6 +7,7 @@ import (
 	"io"
 	"log/slog"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/nousresearch/hermes-go/pkg/agent"
@@ -110,6 +111,30 @@ func newREPL(agentCfg agent.Config, store *session.Store, logger *slog.Logger, m
 	// Create context file loader (hermesHome defaults to ~/.hermes, cwd for project context)
 	cwd, _ := os.Getwd()
 	ctxLoader := hermescontext.NewLoader("", cwd)
+
+	// Initialize skills system: load skillsets config + skills from disk
+	hermesHome := os.Getenv("HERMES_HOME")
+	if hermesHome == "" {
+		home, _ := os.UserHomeDir()
+		if home != "" {
+			hermesHome = filepath.Join(home, ".hermes")
+		}
+	}
+	skillsDir := filepath.Join(hermesHome, "skills")
+	if err := skill.LoadSkillsets(skill.DefaultSkillsYAMLPath()); err != nil {
+		fmt.Fprintf(os.Stderr, "Warning: failed to load skillsets config: %v\n", err)
+	}
+	if skills, err := skill.LoadSkillsFromDisk(skillsDir); err != nil {
+		fmt.Fprintf(os.Stderr, "Warning: failed to load skills from disk: %v\n", err)
+	} else if len(skills) > 0 {
+		fmt.Fprintf(os.Stderr, "Loaded %d skill(s) from %s\n", len(skills), skillsDir)
+	}
+	// Wire skill loader for cron jobs
+	skillLoader := skill.GetLoader()
+	if skillLoader == nil {
+		skillLoader = skill.NewLoader(skillsDir, logger)
+		skill.SetLoader(skillLoader)
+	}
 
 	// Build system prompt from SOUL.md and memory
 	systemPrompt := buildSystemPrompt(ctxLoader, memMgr)
