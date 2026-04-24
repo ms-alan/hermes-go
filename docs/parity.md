@@ -1,7 +1,7 @@
 # hermes-go Feature Parity with hermes-agent (Python)
 
 > Last updated: 2026-04-24
-> Branch: `main` (commit ae1fe2c)
+> Branch: `main` (commit 6385f8f)
 > Python counterpart: `NousResearch/hermes-agent`
 
 This document tracks the feature gap between hermes-go (Go) and hermes-agent (Python).
@@ -35,12 +35,17 @@ Green = implemented, Yellow = partial, Red = not yet.
 | **Browser Automation** | ✅ | `pkg/tools/browser/browser.go` — chromedp multi-tab, screenshot, annotate, click/type/scroll |
 | **Terminal Multi-backend** | ✅ | `pkg/terminal/backend.go` — local + docker + ssh + singularity + modal + daytona (837 lines) |
 | **Code Execution Sandbox** | ✅ | `pkg/tools/code_execution.go` — UDS RPC + hermes_tools.py stub, 7 allowed tools |
-| **Web Extract** | ✅ | `pkg/tools/web_extract_tool.go` — HTML stripping + proxy support |
-| **Image Generation** | ✅ | `pkg/tools/image_gen_tool.go` — MiniMax API, base64 or URL download |
+| **Web Extract** | ✅ | `pkg/tools/web_extract_tool.go` — Parallel HTTP fetch (10 URLs), HTML→text via golang.org/x/net/html, [text](url) links, optional LLM summarization, 8-12k char truncation |
+| **Image Generation** | ✅ | `pkg/tools/image_gen_tool.go` — FAL.ai API (FLUX.3, FLUX.2, DALL-E 3, SDXL), aspect ratios, style presets, guidance/sseed/inference steps, optional local save |
 | **Mixture of Agents** | ✅ | `pkg/tools/mixture_of_agents_tool.go` |
 | **gateway QQ Bot** | ✅ | `pkg/gateway/` — PlatformAdapter + QQBot integration |
 | **Linear Integration** | ✅ | `pkg/tools/linear_tool.go` — GraphQL client: list/create/update/search issues, teams, workflow states, labels |
 | **arXiv Search** | ✅ | `pkg/tools/arxiv_tool.go` — arXiv.org API: keyword/author/category search, ID lookup, relevance/date sorting |
+| **OSV Malware Check** | ✅ | `pkg/tools/osv_check.go` — OSV.dev API: MAL-* prefix detection, SHA256 hash scan, npm/PyPI package vulnerability check, fail-open |
+| **Feishu/Lark Integration** | ✅ | `pkg/tools/feishu_tool.go` + `pkg/feishu/client.go` — doc read, comment CRUD, reply, list; tenant token auto-refresh |
+| **Skills Hub Remote** | ✅ | `pkg/skill/hub.go` + `pkg/tools/skill_hub_tool.go` — GitHub tap search, quarantine install, trust levels, default taps |
+| **HomeAssistant** | ✅ | `pkg/tools/homeassistant_tool.go` — list entities, get state, list services, call service; blocked dangerous domains (shell_command, python_script, etc.) |
+| **Discord Social** | ✅ | `pkg/tools/discord_tool.go` — 14 actions: guilds, channels, roles, members, messages, pins, threads, role management; rich embed parsing, rate limit handling |
 | **gateway RPCs + /delegation** | ✅ | `pkg/tui_rpc/` + `cmd/tui_rpc/` — JSON-RPC 2.0 stdio server: delegation.status/pause, subagent.interrupt; REPL built-in /delegation command (status/pause/resume/interrupt) |
 
 ---
