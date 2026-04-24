@@ -116,6 +116,21 @@ func connectMCPServer(cfg mcp.MCPServerConfig) {
 
 	if cfg.Transport == "http" || cfg.URL != "" {
 		transport = mcp.NewHTTPTransport(cfg.URL, cfg.Headers, cfg.Timeout)
+	} else if cfg.Transport == "sse" {
+		sseTransport := mcp.NewSSETransport(cfg.URL, cfg.SSEPath, cfg.HTTPPath, cfg.Headers)
+		// Sampling is enabled by default; register the default handler if present
+		if cfg.Sampling.Enabled {
+			// The hermes agent will set a real handler via the Client.SetSamplingHandler API.
+			// For now, mark sampling as enabled in the transport.
+			log.Printf("[mcp][%s] sampling enabled (model=%q, timeout=%d)",
+				cfg.Name, cfg.Sampling.Model, cfg.Sampling.Timeout)
+		}
+		transport = sseTransport
+		go func() {
+			if err := sseTransport.Subscribe(context.Background()); err != nil {
+				log.Printf("[mcp][%s] SSE subscription failed: %v", cfg.Name, err)
+			}
+		}()
 	} else {
 		params := mcp.StdioServerParameters{
 			Command: cfg.Command,

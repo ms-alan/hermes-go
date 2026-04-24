@@ -169,10 +169,50 @@ func mapToServer(m map[string]interface{}) (MCPServerConfig, error) {
 		srv.Disabled = v
 	}
 
+	if v, ok := m["sampling"].(map[string]interface{}); ok {
+		srv.Sampling = parseSamplingConfig(v)
+	}
+
 	// Detect disabled from name convention (ending with _disabled)
 	if strings.HasSuffix(srv.Name, "_disabled") {
 		srv.Disabled = true
 	}
 
 	return srv, nil
+}
+
+func parseSamplingConfig(m map[string]interface{}) SamplingConfig {
+	cfg := SamplingConfig{Enabled: true} // default enabled
+	if v, ok := m["enabled"].(bool); ok {
+		cfg.Enabled = v
+	}
+	if v, ok := m["model"].(string); ok {
+		cfg.Model = v
+	}
+	if v, ok := m["maxTokensCap"].(int); ok {
+		cfg.MaxTokensCap = v
+	} else if v, ok := m["max_tokens_cap"].(int); ok {
+		cfg.MaxTokensCap = v
+	}
+	if v, ok := m["timeout"].(int); ok {
+		cfg.Timeout = v
+	}
+	if v, ok := m["maxRpm"].(int); ok {
+		cfg.MaxRPM = v
+	} else if v, ok := m["max_rpm"].(int); ok {
+		cfg.MaxRPM = v
+	}
+	if v, ok := m["allowedModels"].([]interface{}); ok {
+		for _, a := range v {
+			if s, ok := a.(string); ok {
+				cfg.AllowedModels = append(cfg.AllowedModels, s)
+			}
+		}
+	}
+	if v, ok := m["maxToolRounds"].(int); ok {
+		cfg.MaxToolRounds = v
+	} else if v, ok := m["max_tool_rounds"].(int); ok {
+		cfg.MaxToolRounds = v
+	}
+	return cfg
 }

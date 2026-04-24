@@ -174,19 +174,9 @@ type HTTPTransport struct {
 	client  *http.Client
 }
 
-// NewHTTPTransport creates a transport for an HTTP MCP server.
-func NewHTTPTransport(baseURL string, headers map[string]string, timeout int) *HTTPTransport {
-	t := &HTTPTransport{
-		baseURL: strings.TrimSuffix(baseURL, "/"),
-		headers: headers,
-		client:  &http.Client{},
-	}
-	if timeout > 0 {
-		t.client.Timeout = time.Duration(timeout) * time.Second
-	} else {
-		t.client.Timeout = 120 * time.Second
-	}
-	return t
+// NewHTTPTransport creates an HTTP/1.1 + HTTP/2 capable transport for an MCP server.
+func NewHTTPTransport(baseURL string, headers map[string]string, timeout int) *HTTP2Transport {
+	return NewHTTP2Transport(baseURL, headers, timeout, true)
 }
 
 // Send sends a JSON-RPC request over HTTP POST.
@@ -255,10 +245,11 @@ func (t *HTTPTransport) Close() error {
 
 // Client manages connections to one or more MCP servers.
 type Client struct {
-	mu       sync.RWMutex
-	servers  map[string]Transport
-	tools    map[string]MCPTool // key: "serverName:toolName"
-	disabled map[string]bool
+	mu               sync.RWMutex
+	servers          map[string]Transport
+	tools            map[string]MCPTool // key: "serverName:toolName"
+	disabled         map[string]bool
+	samplingHandler  SamplingHandler
 }
 
 // NewClient creates a new MCP client.
@@ -268,6 +259,15 @@ func NewClient() *Client {
 		tools:    make(map[string]MCPTool),
 		disabled: make(map[string]bool),
 	}
+}
+
+// SetSamplingHandler sets the handler for server-initiated sampling/createMessage requests.
+// Call this before ConnectServer for it to take effect on already-connected servers,
+// or set it before any ConnectServer calls.
+func (c *Client) SetSamplingHandler(handler SamplingHandler) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.samplingHandler = handler
 }
 
 // ConnectServer connects to a single MCP server and discovers its tools.
@@ -287,8 +287,12 @@ func (c *Client) ConnectServer(cfg MCPServerConfig) error {
 		transport = NewHTTPTransport(cfg.URL, cfg.Headers, cfg.ConnectTimeout)
 	case "sse":
 		sseTransport := NewSSETransport(cfg.URL, cfg.SSEPath, cfg.HTTPPath, cfg.Headers)
+		// Wire up sampling handler if client has one and server sampling is enabled
+		if c.samplingHandler != nil && cfg.Sampling.Enabled {
+			sseTransport.SetSamplingHandler(c.samplingHandler, cfg.Sampling)
+		}
 		transport = sseTransport
-		// Start SSE subscription for server-initiated notifications
+		// Start SSE subscription for server-initiated notifications (with auto-reconnect)
 		go func() {
 			if err := sseTransport.Subscribe(context.Background()); err != nil {
 				slog.Warn("MCP SSE subscription failed", "server", cfg.Name, "err", err)

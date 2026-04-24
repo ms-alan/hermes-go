@@ -1,7 +1,10 @@
 // Package mcp provides types for the Model Context Protocol (MCP).
 package mcp
 
-import "encoding/json"
+import (
+	"context"
+	"encoding/json"
+)
 
 // Protocol version supported by this implementation.
 const ProtocolVersion = "2024-11-05"
@@ -126,8 +129,10 @@ type MCPServerConfig struct {
 	ConnectTimeout int               `json:"connectTimeout,omitempty"`
 	Disabled       bool              `json:"disabled,omitempty"`
 	// SSE-specific paths (used when Transport == "sse")
-	SSEPath   string `json:"ssePath,omitempty"`   // endpoint for SSE subscription (default "/sse")
-	HTTPPath  string `json:"httpPath,omitempty"`  // endpoint for HTTP POST requests (default "/mcp")
+	SSEPath   string          `json:"ssePath,omitempty"`   // endpoint for SSE subscription (default "/sse")
+	HTTPPath  string          `json:"httpPath,omitempty"`  // endpoint for HTTP POST requests (default "/mcp")
+	// Sampling configures server-initiated LLM sampling (sampling/createMessage).
+	Sampling SamplingConfig `json:"sampling,omitempty"`
 }
 
 // MCPConfig is the top-level MCP configuration.
@@ -142,24 +147,50 @@ type MCPDefaults struct {
 	ConnectTimeout int `json:"connectTimeout,omitempty"`
 }
 
+// SamplingConfig configures server-initiated LLM sampling behavior.
+type SamplingConfig struct {
+	Enabled       bool     `json:"enabled,omitempty"`
+	Model         string   `json:"model,omitempty"`
+	MaxTokensCap  int      `json:"maxTokensCap,omitempty"`
+	Timeout       int      `json:"timeout,omitempty"`
+	MaxRPM        int      `json:"maxRpm,omitempty"`
+	AllowedModels []string `json:"allowedModels,omitempty"`
+	MaxToolRounds int      `json:"maxToolRounds,omitempty"`
+}
+
 // SamplingCreateMessageRequest is the params for sampling/createMessage.
 type SamplingCreateMessageRequest struct {
-	Method      string           `json:"method"`
-	Messages    []SamplingMessage `json:"messages,omitempty"`
-	MaxTokens   int              `json:"maxTokens,omitempty"`
-	StopSequences []string       `json:"stopSequences,omitempty"`
-	SystemPrompt string          `json:"systemPrompt,omitempty"`
-	Temperature float64          `json:"temperature,omitempty"`
+	Method        string            `json:"method"`
+	Messages      []SamplingMessage `json:"messages,omitempty"`
+	MaxTokens     int               `json:"maxTokens,omitempty"`
+	StopSequences []string          `json:"stopSequences,omitempty"`
+	SystemPrompt  string            `json:"systemPrompt,omitempty"`
+	Temperature   float64           `json:"temperature,omitempty"`
+	// IncludeContext allows the server to request specific context tiers.
+	IncludeContext *IncludeContextRequest `json:"includeContext,omitempty"`
+}
+
+// IncludeContextRequest specifies what context tiers to include in a sampling request.
+type IncludeContextRequest struct {
+	Strategies []string `json:"strategies,omitempty"` // e.g. "currentWindow", "recentHistory"
+}
+
+// SamplingCreateMessageResult is returned by sampling/createMessage.
+type SamplingCreateMessageResult struct {
+	Content []ContentBlock `json:"content"`
+	Role    string         `json:"role"`
+}
+
+// SamplingHandler handles server-initiated sampling/createMessage requests.
+type SamplingHandler interface {
+	// HandleSamplingRequest processes a sampling/createMessage request from an MCP server
+	// and returns an LLM response. The model parameter is the model hint from the server;
+	// the handler may override it based on SamplingConfig.
+	HandleSamplingRequest(ctx context.Context, serverName string, req *SamplingCreateMessageRequest, cfg SamplingConfig) (*SamplingCreateMessageResult, error)
 }
 
 // SamplingMessage is a message in a sampling request.
 type SamplingMessage struct {
 	Role    string `json:"role"` // "user" or "assistant"
 	Content string `json:"content"`
-}
-
-// SamplingCreateMessageResult is returned by sampling/createMessage.
-type SamplingCreateMessageResult struct {
-	Content []ContentBlock `json:"content"`
-	Role    string          `json:"role"`
 }
