@@ -15,6 +15,7 @@ import (
 	hermescontext "github.com/nousresearch/hermes-go/pkg/context"
 	hermesmemory "github.com/nousresearch/hermes-go/pkg/memory"
 	"github.com/nousresearch/hermes-go/pkg/model"
+	"github.com/nousresearch/hermes-go/pkg/prompt"
 	"github.com/nousresearch/hermes-go/pkg/session"
 	"github.com/nousresearch/hermes-go/pkg/skill"
 	"github.com/nousresearch/hermes-go/pkg/tools"
@@ -136,8 +137,8 @@ func newREPL(agentCfg agent.Config, store *session.Store, logger *slog.Logger, m
 		skill.SetLoader(skillLoader)
 	}
 
-	// Build system prompt from SOUL.md and memory
-	systemPrompt := buildSystemPrompt(ctxLoader, memMgr)
+	// Build system prompt from SOUL.md, memory, project context, and platform identity
+	systemPrompt := prompt.NewBuilder(ctxLoader, memMgr).WithPlatform("cli").Build()
 
 	// Create AIAgent
 	aiAgent := agent.NewAIAgent(modelClient, agentCfg)
@@ -316,38 +317,6 @@ func (r *repl) handleCommand(ctx context.Context, cmd string) error {
 		return fmt.Errorf("unknown command: %s", name)
 	}
 	return nil
-}
-
-// buildSystemPrompt assembles the initial system prompt from SOUL.md, memory, and project context.
-func buildSystemPrompt(ctxLoader *hermescontext.Loader, memMgr *hermesmemory.MemoryManager) string {
-	var parts []string
-
-	// Slot #1: SOUL.md — agent identity
-	if soul, err := ctxLoader.LoadSOUL(); err == nil && soul != "" {
-		parts = append(parts, soul)
-	}
-
-	// Memory snapshot from built-in provider
-	if memMgr != nil {
-		if bp := memMgr.GetProvider("builtin"); bp != nil {
-			if block := bp.SystemPromptBlock(); block != "" {
-				parts = append(parts, block)
-			}
-		}
-	}
-
-	// Project context
-	if proj, err := ctxLoader.LoadProjectContext(); err == nil && proj != "" {
-		parts = append(parts, proj)
-	}
-
-	// Fallback identity if nothing loaded
-	if len(parts) == 0 {
-		parts = append(parts, "You are Hermes, a helpful AI assistant.")
-	}
-
-	result := strings.Join(parts, "\n\n")
-	return result
 }
 
 func (r *repl) printHelp() {

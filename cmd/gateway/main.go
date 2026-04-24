@@ -273,6 +273,13 @@ func main() {
 	for _, a := range adapters {
 		a.Disconnect(ctx)
 	}
+	// Persist session store before exit
+	if store != nil {
+		if err := store.Close(); err != nil {
+			logger.Error("session store close", "error", err)
+		}
+	}
+	// MemoryStore is read-only at runtime (Load() captures a frozen snapshot; no write-back)
 }
 
 // qqHandler dispatches QQ messages to the session agent.
