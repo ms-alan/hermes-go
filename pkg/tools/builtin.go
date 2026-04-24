@@ -1122,6 +1122,18 @@ func init() {
 		"Solve complex tasks using multiple LLMs — parallel reference models + aggregator synthesis (MoE)",
 		"🧠",
 	)
+
+	Register(
+		"openrouter_status",
+		"builtin",
+		openrouterClientSchema,
+		openrouterClientHandler,
+		nil,
+		nil,
+		false,
+		"Check OpenRouter API key status and available models",
+		"🔑",
+	)
 }
 
 // ---------------------------------------------------------------------------
