@@ -79,8 +79,35 @@ type RunResult struct {
 	Error         error
 }
 
+// parseToolArgs parses raw JSON tool arguments, handling common encoding
+// variations from different LLM providers (single, double, or triple encoding).
+// Returns a map on success, nil on failure.
+func parseToolArgs(rawArgs string, logger Logger, toolName string) map[string]any {
+	var argsMap map[string]any
+	// Try up to 3 levels of decoding to handle multi-encoded LLM outputs.
+	const maxDepth = 3
+	for depth := 0; depth < maxDepth; depth++ {
+		if err := json.Unmarshal([]byte(rawArgs), &argsMap); err == nil {
+			if depth > 0 {
+				logger.Debug("tool args decoded", "tool", toolName, "depth", depth)
+			}
+			return argsMap
+		}
+		// Try to decode as a JSON string, then re-parse.
+		var argsStr string
+		if err2 := json.Unmarshal([]byte(rawArgs), &argsStr); err2 != nil {
+			// Not a string either — give up.
+			logger.Warn("failed to parse tool arguments", "tool", toolName,
+				"raw_length", len(rawArgs), "error", err2)
+			return nil
+		}
+		rawArgs = argsStr // Try parsing the decoded string next iteration.
+	}
+	logger.Warn("tool arguments too deeply encoded, giving up", "tool", toolName)
+	return nil
+}
+
 // RunWithMessages runs a conversation loop with the given messages and system prompt.
-// The messages slice is used as the starting point; new messages are appended during the loop.
 func (a *AIAgent) RunWithMessages(ctx context.Context, messages []*model.Message, systemPrompt string) *RunResult {
 	// Prepend system prompt if provided
 	if systemPrompt != "" {
@@ -101,11 +128,6 @@ func (a *AIAgent) RunWithMessages(ctx context.Context, messages []*model.Message
 			Model:    a.config.Model,
 			Messages: messages,
 			Tools:    a.config.Tools,
-		}
-
-		// Debug: print context before LLM call
-		if debugJSON, err := json.MarshalIndent(req, "", "  "); err == nil {
-			fmt.Printf(">>> LLM REQUEST CONTEXT (iteration %d):\n%s\n", iteration, debugJSON)
 		}
 
 		// Call the LLM
@@ -132,23 +154,8 @@ func (a *AIAgent) RunWithMessages(ctx context.Context, messages []*model.Message
 			for _, tc := range assistantMsg.ToolCalls {
 				toolName := tc.Function.Name
 				rawArgs := string(tc.Function.Arguments)
-				fmt.Printf(">>> TOOL CALL: tool=%s rawArgs=%s\n", toolName, rawArgs)
 
-				// Parse arguments into a map
-				var argsMap map[string]any
-				if err := json.Unmarshal([]byte(rawArgs), &argsMap); err != nil {
-					// Double-encoded: raw message itself is a JSON string, decode twice
-					var argsStr string
-					if err2 := json.Unmarshal([]byte(rawArgs), &argsStr); err2 == nil {
-						if err3 := json.Unmarshal([]byte(argsStr), &argsMap); err3 != nil {
-							a.logger.Warn("failed to parse tool arguments (double-decode)", "tool", toolName, "error", err3)
-							argsMap = nil
-						}
-					} else {
-						a.logger.Warn("failed to parse tool arguments", "tool", toolName, "error", err)
-						argsMap = nil
-					}
-				}
+				argsMap := parseToolArgs(rawArgs, a.logger, toolName)
 
 				toolReq := &model.ToolCallRequest{
 					ID:        tc.ID,
@@ -209,11 +216,6 @@ func (a *AIAgent) RunConversation(ctx context.Context, userMessage string, syste
 			Tools:    a.config.Tools,
 		}
 
-		// Debug: print context before LLM call
-		if debugJSON, err := json.MarshalIndent(req, "", "  "); err == nil {
-			fmt.Printf(">>> LLM REQUEST CONTEXT (iteration %d):\n%s\n", iteration, debugJSON)
-		}
-
 		// Call the LLM
 		resp, err := a.client.Chat(ctx, req)
 		if err != nil {
@@ -238,23 +240,8 @@ func (a *AIAgent) RunConversation(ctx context.Context, userMessage string, syste
 			for _, tc := range assistantMsg.ToolCalls {
 				toolName := tc.Function.Name
 				rawArgs := string(tc.Function.Arguments)
-				fmt.Printf(">>> TOOL CALL: tool=%s rawArgs=%s\n", toolName, rawArgs)
 
-				// Parse arguments into a map
-				var argsMap map[string]any
-				if err := json.Unmarshal([]byte(rawArgs), &argsMap); err != nil {
-					// Double-encoded: raw message itself is a JSON string, decode twice
-					var argsStr string
-					if err2 := json.Unmarshal([]byte(rawArgs), &argsStr); err2 == nil {
-						if err3 := json.Unmarshal([]byte(argsStr), &argsMap); err3 != nil {
-							a.logger.Warn("failed to parse tool arguments (double-decode)", "tool", toolName, "error", err3)
-							argsMap = nil
-						}
-					} else {
-						a.logger.Warn("failed to parse tool arguments", "tool", toolName, "error", err)
-						argsMap = nil
-					}
-				}
+				argsMap := parseToolArgs(rawArgs, a.logger, toolName)
 
 				toolReq := &model.ToolCallRequest{
 					ID:        tc.ID,
