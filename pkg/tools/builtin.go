@@ -1148,15 +1148,27 @@ func init() {
 	)
 
 	Register(
-		"neutts_synth",
+		"transcription",
 		"builtin",
-		neutttsSynthSchema,
-		neutttsSynthHandler,
+		transcriptionSchema,
+		transcriptionHandler,
 		nil,
 		nil,
 		false,
-		"Check Neuttts TTS configuration",
-		"🔊",
+		"Transcribe audio to text — stub (requires faster-whisper or API keys for OpenAI/Groq/Gemini)",
+		"🎤",
+	)
+
+	Register(
+		"env_passthrough",
+		"builtin",
+		envPassthroughSchema,
+		envPassthroughHandler,
+		nil,
+		nil,
+		false,
+		"Read environment variables for the agent process",
+		"🌿",
 	)
 }
 
