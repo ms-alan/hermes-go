@@ -1,7 +1,7 @@
 # hermes-go Feature Parity with hermes-agent (Python)
 
 > Last updated: 2026-04-24
-> Branch: `main` (commit e61b073)
+> Branch: `main` (commit fb8ac3b)
 > Python counterpart: `NousResearch/hermes-agent`
 
 This document tracks the feature gap between hermes-go (Go) and hermes-agent (Python).
@@ -39,6 +39,7 @@ Green = implemented, Yellow = partial, Red = not yet.
 | **Image Generation** | ✅ | `pkg/tools/image_gen_tool.go` — MiniMax API, base64 or URL download |
 | **Mixture of Agents** | ✅ | `pkg/tools/mixture_of_agents_tool.go` |
 | **gateway QQ Bot** | ✅ | `pkg/gateway/` — PlatformAdapter + QQBot integration |
+| **Linear Integration** | ✅ | `pkg/tools/linear_tool.go` — GraphQL client: list/create/update/search issues, teams, workflow states, labels |
 
 ---
 
@@ -54,7 +55,6 @@ Green = implemented, Yellow = partial, Red = not yet.
 
 | Feature | Python File | Priority | Notes |
 |---------|------------|----------|-------|
-| **linear integration** | `tools/linear_tool.py` | Low | Linear API for issue management |
 | **arxiv search** | `tools/arxiv_tool.py` | Low | arXiv paper search |
 | **TUI / Interactive Overlay** | `agent/display/` | Low | Rich terminal UI with subagent progress, spinner, color |
 | **gateway RPCs** | `hermes_cli/gateway_rpc.py` | Low | `delegation.pause`, `delegation.status`, `subagent.interrupt` |
