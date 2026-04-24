@@ -1146,6 +1146,18 @@ func init() {
 		"Check xAI (Grok) API availability and configuration",
 		"🤖",
 	)
+
+	Register(
+		"neutts_synth",
+		"builtin",
+		neutttsSynthSchema,
+		neutttsSynthHandler,
+		nil,
+		nil,
+		false,
+		"Check Neuttts TTS configuration",
+		"🔊",
+	)
 }
 
 // ---------------------------------------------------------------------------
