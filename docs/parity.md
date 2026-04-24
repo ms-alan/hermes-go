@@ -45,7 +45,7 @@ Green = implemented, Yellow = partial, Red = not yet.
 
 | Feature | Status | Notes |
 |---------|--------|-------|
-| **Token Counting** | ⚠️ rough | `pkg/context/token.go` uses character ÷ 4 approximation, not tiktoken |
+| **Token Counting** | ✅ | `pkg/context/token.go` — tiktoken cl100k_base (same as GPT-4/GPT-3.5), lazy-init with fallback to character heuristic, `CountTokensForModel` per-model encoding support |
 | **Double-JSON Decode** | ⚠️ in agent | `pkg/agent/agent.go` handles double-encoded tool args for MiniMax, not generic |
 
 ---

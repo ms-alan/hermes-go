@@ -278,10 +278,30 @@ func (m *Manager) CacheStats() Stats {
 // --------------------------------------------------------------------------+
 
 // EstimateMessagesTokens estimates total token count for a message list.
+// Uses tiktoken cl100k_base when available (accurate), falls back to
+// per-message EstimateMessageTokens heuristic.
 func EstimateMessagesTokens(messages []*model.Message) int {
+	if len(messages) == 0 {
+		return 0
+	}
+	enc, err := getCl100kEncoder()
+	if err != nil || enc == nil {
+		// Fallback: use per-message heuristic.
+		total := 0
+		for _, m := range messages {
+			total += EstimateMessageTokens(string(m.Role), m.Content, len(m.ToolCalls))
+		}
+		return total
+	}
+
+	// Fast tiktoken path: encode each message content with the shared encoder.
 	total := 0
-	for _, msg := range messages {
-		total += EstimateMessageTokens(string(msg.Role), msg.Content, len(msg.ToolCalls))
+	for _, m := range messages {
+		contentTokens := len(enc.Encode(m.Content, nil, nil))
+		// Role delimiter overhead (~4 tokens).
+		total += contentTokens + 4
+		// Tool calls overhead (~15 tokens each).
+		total += len(m.ToolCalls) * 15
 	}
 	return total
 }
