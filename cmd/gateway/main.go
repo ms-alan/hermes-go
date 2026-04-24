@@ -113,7 +113,7 @@ func main() {
 	aiAgent := agent.NewAIAgent(modelClient, agentCfg)
 
 	// Register built-in tools so gateway can handle tool calls from QQ messages
-	tools.RegisterBuiltinToolsToAgent(aiAgent)
+	tools.RegisterBuiltinToolsToAgent(aiAgent, nil) // nil = load all tools; use toolsets param to restrict
 	aiAgent.SyncToolsToConfig()
 
 	// Session agent

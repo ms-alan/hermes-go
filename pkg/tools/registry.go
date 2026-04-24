@@ -244,6 +244,62 @@ func (r *ToolRegistry) GetAllToolNames() []string {
 	return r.List()
 }
 
+// ToolsetInfo describes a toolset and its constituent tools.
+type ToolsetInfo struct {
+	Name        string   `json:"name"`
+	Description string   `json:"description"`
+	Tools       []string `json:"tools"`
+	Available   bool     `json:"available"`
+}
+
+// GetAvailableToolsets returns metadata for all toolsets in the registry.
+// Each toolset's description is derived from the most-described tool in the
+// set; tools with no description get the toolset name as their description.
+func (r *ToolRegistry) GetAvailableToolsets() map[string]ToolsetInfo {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	// Group tools by toolset.
+	toolsetMap := make(map[string][]*ToolEntry)
+	for _, entry := range r.tools {
+		toolsetMap[entry.Toolset] = append(toolsetMap[entry.Toolset], entry)
+	}
+
+	result := make(map[string]ToolsetInfo, len(toolsetMap))
+	for name, entries := range toolsetMap {
+		// Build description from the first entry that has one.
+		desc := name
+		for _, e := range entries {
+			if e.Description != "" {
+				desc = e.Description
+				break
+			}
+		}
+
+		// Collect tool names and check availability.
+		tools := make([]string, 0, len(entries))
+		allAvailable := true
+		for _, e := range entries {
+			tools = append(tools, e.Name)
+			if e.CheckFn != nil {
+				defer func(fn func() bool) {
+					if !fn() {
+						allAvailable = false
+					}
+				}(e.CheckFn)
+			}
+		}
+
+		result[name] = ToolsetInfo{
+			Name:        name,
+			Description: desc,
+			Tools:       tools,
+			Available:   allAvailable,
+		}
+	}
+	return result
+}
+
 // GetToolNamesForToolset returns sorted tool names registered under a given toolset.
 func (r *ToolRegistry) GetToolNamesForToolset(toolset string) []string {
 	r.mu.RLock()

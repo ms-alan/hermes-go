@@ -111,7 +111,7 @@ func newREPL(agentCfg agent.Config, store *session.Store, logger *slog.Logger, m
 
 	// Register built-in tools from the tools package
 	// (populates both the handler registry and the LLM-facing tool schemas)
-	registerBuiltinTools(aiAgent)
+	registerBuiltinTools(aiAgent, nil)
 
 	// Sync tools into agent.Config.Tools so AIAgent sends them in LLM requests
 	aiAgent.SyncToolsToConfig()

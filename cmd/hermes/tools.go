@@ -8,6 +8,8 @@ import (
 )
 
 // registerBuiltinTools is called by newREPL to wire built-in tools into the agent.
-func registerBuiltinTools(aiAgent *agent.AIAgent) {
-	tools.RegisterBuiltinToolsToAgent(aiAgent)
+// Pass nil for toolsets to load all available tools; or a list like
+// []string{"terminal", "file", "web"} to restrict to specific toolsets.
+func registerBuiltinTools(aiAgent *agent.AIAgent, toolsets []string) {
+	tools.RegisterBuiltinToolsToAgent(aiAgent, toolsets)
 }
