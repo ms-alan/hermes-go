@@ -112,20 +112,6 @@ func browserSnapshotHandler(args map[string]any) string {
 	return toolResult("snapshot", result)
 }
 
-func browserVisionHandler(args map[string]any) string {
-	ctx := context.Background()
-	path, err := browserManager.Screenshot(ctx)
-	if err != nil {
-		return toolError(fmt.Sprintf("screenshot failed: %v", err))
-	}
-	question, _ := args["question"].(string)
-	return toolResultData(map[string]any{
-		"screenshot": path,
-		"question":   question,
-		"note":       "Screenshot saved. Use vision_analyze to analyze the image.",
-	})
-}
-
 // ---------------------------------------------------------------------------
 // Interaction tools
 // ---------------------------------------------------------------------------

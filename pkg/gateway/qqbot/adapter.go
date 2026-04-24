@@ -28,6 +28,9 @@ type Adapter struct {
 	Handler   gateway.MessageHandler
 	connCtx    context.Context
 	connCancel context.CancelFunc
+	// userToChannel caches the latest ChannelID for each user (updated on DM receive).
+	// Used by Send to route DM when ChatID is unavailable but UserID is known.
+	userToChannel map[string]string
 }
 
 // NewAdapter creates a new QQ adapter.
@@ -42,7 +45,7 @@ func NewAdapter(cfg *Config, logger *slog.Logger) (*Adapter, error) {
 	if logger == nil {
 		logger = slog.Default()
 	}
-	return &Adapter{config: cfg, api: api, logger: logger}, nil
+	return &Adapter{config: cfg, api: api, logger: logger, userToChannel: make(map[string]string)}, nil
 }
 
 func (a *Adapter) Platform() gateway.Platform { return gateway.PlatformQQ }
@@ -76,20 +79,35 @@ func (a *Adapter) Disconnect(ctx context.Context) error {
 func (a *Adapter) IsConnected() bool { return a.running.Load() }
 
 func (a *Adapter) Send(ctx context.Context, out *gateway.OutboundMessage) (*gateway.SendResult, error) {
+	// Resolve target: prefer explicit ChatID; for DMs fall back to cached channel for UserID.
+	targetChatID := out.ChatID
+	if targetChatID == "" && out.UserID != "" {
+		a.mu.RLock()
+		cached, ok := a.userToChannel[out.UserID]
+		a.mu.RUnlock()
+		if ok {
+			targetChatID = cached
+			a.logger.Debug("qqbot routing DM via cached channel", "user_id", out.UserID, "channel_id", targetChatID)
+		}
+	}
+	if targetChatID == "" {
+		return &gateway.SendResult{Success: false, Error: "no chat_id and no cached channel for user"}, nil
+	}
+
 	if out.ImagePath != "" {
-		url, err := a.api.UploadMedia(ctx, out.ChatID, out.ImagePath, "image")
+		url, err := a.api.UploadMedia(ctx, targetChatID, out.ImagePath, "image")
 		if err != nil { return &gateway.SendResult{Success: false, Error: err.Error()}, nil }
-		resp, err := a.api.SendMessage(ctx, out.ChatID, url)
+		resp, err := a.api.SendMessage(ctx, targetChatID, url)
 		if err != nil { return &gateway.SendResult{Success: false, Error: err.Error()}, nil }
 		return &gateway.SendResult{MessageID: resp.ID, Success: true}, nil
 	}
 	if a.config.MarkdownEnabled {
-		if err := a.api.SendMarkdown(ctx, out.ChatID, out.Content); err != nil {
+		if err := a.api.SendMarkdown(ctx, targetChatID, out.Content); err != nil {
 			return &gateway.SendResult{Success: false, Error: err.Error()}, nil
 		}
 		return &gateway.SendResult{Success: true}, nil
 	}
-	resp, err := a.api.SendMessage(ctx, out.ChatID, out.Content)
+	resp, err := a.api.SendMessage(ctx, targetChatID, out.Content)
 	if err != nil { return &gateway.SendResult{Success: false, Error: err.Error()}, nil }
 	return &gateway.SendResult{MessageID: resp.ID, Success: true}, nil
 }
@@ -190,6 +208,10 @@ func (a *Adapter) handleDirectMessageCreate(ctx context.Context, data json.RawMe
 	var event struct{ Data DirectMessageCreateEvent `json:"d"` }
 	if json.Unmarshal(data, &event) != nil { return }
 	if event.Data.Author == nil { return }
+	// Cache the ChannelID for this user so we can send DMs later via UserID.
+	a.mu.Lock()
+	a.userToChannel[event.Data.Author.ID] = event.Data.ChannelID
+	a.mu.Unlock()
 	msg := &gateway.InboundMessage{
 		Platform:   gateway.PlatformQQ,
 		ChatID:    event.Data.ChannelID,

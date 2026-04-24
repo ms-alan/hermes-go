@@ -95,20 +95,44 @@ var browserSnapshotSchema = map[string]any{
 
 var browserScreenshotSchema = map[string]any{
 	"name":        "browser_screenshot",
-	"description": "Take a screenshot of the current page and save to a file.",
+	"description": "Take a screenshot of the current page and save to a file. Use annotate=true to overlay numbered [N] labels on interactive elements; each [N] maps to ref @eN for subsequent browser commands (browser_click, browser_type).",
 	"parameters": map[string]any{
 		"type": "object",
 		"properties": map[string]any{
-			"path": map[string]any{
-				"type":        "string",
-				"description": "Optional path to save the screenshot (default: ~/Downloads/hermes_screenshot.png)",
-			},
 			"question": map[string]any{
 				"type":        "string",
 				"description": "Optional question about the screenshot (for AI analysis via vision_analyze)",
 			},
+			"annotate": map[string]any{
+				"type":        "boolean",
+				"description": "If true, overlay numbered [N] labels on interactive elements. Each [N] maps to ref @eN for browser_click or browser_type.",
+			},
 		},
 	},
+}
+
+func browserVisionHandler(args map[string]any) string {
+	annotate, _ := args["annotate"].(bool)
+
+	ctx := context.Background()
+	var path string
+	var err error
+
+	if annotate {
+		path, _, err = browserManager.AnnotateScreenshot(ctx)
+	} else {
+		path, err = browserManager.Screenshot(ctx)
+	}
+	if err != nil {
+		return toolError(fmt.Sprintf("screenshot failed: %v", err))
+	}
+	question, _ := args["question"].(string)
+	return toolResultData(map[string]any{
+		"screenshot": path,
+		"question":   question,
+		"annotated":  annotate,
+		"note":       "Screenshot saved. Use vision_analyze to analyze the image.",
+	})
 }
 
 var browserClickSchema = map[string]any{

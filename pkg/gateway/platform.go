@@ -40,10 +40,11 @@ type InboundMessage struct {
 // OutboundMessage is what the agent wants to send to a platform.
 type OutboundMessage struct {
 	Platform  Platform `json:"platform"` // defaults to PlatformQQ
-	ChatID    string  `json:"chat_id"`
-	Content   string  `json:"content"`
-	ImagePath string  `json:"image_path,omitempty"`
-	ThreadID  string  `json:"thread_id,omitempty"`
+	ChatID    string   `json:"chat_id"`   // channel or conversation ID
+	UserID    string   `json:"user_id,omitempty"` // user ID (for DM routing when ChatID is unavailable)
+	Content   string   `json:"content"`
+	ImagePath string   `json:"image_path,omitempty"`
+	ThreadID  string   `json:"thread_id,omitempty"`
 }
 
 // SendResult is the result of a send operation.

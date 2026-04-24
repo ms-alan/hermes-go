@@ -34,6 +34,12 @@ func RegisterBuiltinToolsToAgent(aiAgent *agent.AIAgent) {
 
 		handler := entry.Handler
 		wrapped := func(ctx context.Context, req *model.ToolCallRequest) *model.ToolResult {
+			// Propagate delivery origin to the async-safe store so tools
+			// that don't receive context can still access it (e.g. cron tool).
+			origin := DeliveryOriginFromContext(ctx)
+			SetCurrentDeliveryOrigin(origin)
+			defer SetCurrentDeliveryOrigin(nil)
+
 			output := handler(req.Arguments)
 			// Detect error responses: handlers return {"error": "msg"} on failure.
 			if isToolError(output) {

@@ -267,12 +267,26 @@ type qqHandler struct {
 }
 
 func (h *qqHandler) HandleInbound(ctx context.Context, msg *gateway.InboundMessage) error {
+	// Build delivery origin so tools (e.g. cron) know where to deliver.
+	ctx = tools.WithDeliveryOrigin(ctx, &cron.DeliveryOrigin{
+		Platform:  string(msg.Platform),
+		ChatID:    msg.ChatID,
+		UserID:    msg.UserID,
+		SessionID: h.agent.SessionID(),
+	})
+
 	response, err := h.agent.Chat(ctx, msg.Content)
 	if err != nil {
 		h.logger.Error("chat error", "error", err)
 		response = "抱歉，处理消息时出错了。"
 	}
-	result, err := h.adapter.SendText(ctx, msg.ChatID, response)
+	// Use Send instead of SendText so markdown and image_path are supported.
+	result, err := h.adapter.Send(ctx, &gateway.OutboundMessage{
+		Platform: gateway.PlatformQQ,
+		ChatID:   msg.ChatID,
+		UserID:   msg.UserID,
+		Content:  response,
+	})
 	if err != nil {
 		h.logger.Error("send error", "chat_id", msg.ChatID, "error", err)
 		return fmt.Errorf("send failed: %w", err)

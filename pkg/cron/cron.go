@@ -78,10 +78,11 @@ type Job struct {
 
 // DeliveryOrigin describes where a job was created for "origin" delivery.
 type DeliveryOrigin struct {
-	Platform  string `json:"platform"`  // e.g. "qqbot"
-	ChatID    string `json:"chatId"`    // e.g. "B37D6F61D..."
-	ThreadID  string `json:"threadId,omitempty"`
-	SessionID string `json:"sessionId,omitempty"`
+	Platform  string `json:"platform"`               // e.g. "qqbot"
+	ChatID    string `json:"chatId"`                 // e.g. channel or conversation ID
+	UserID    string `json:"userId,omitempty"`       // user ID for DM routing
+	ThreadID  string `json:"threadId,omitempty"`     // thread/topic ID
+	SessionID string `json:"sessionId,omitempty"`    // session ID
 }
 
 // ParseSchedule parses a human-readable schedule string.

@@ -34,6 +34,9 @@ func (d *QQDeliverer) Deliver(ctx context.Context, jobID string, content string,
 		ChatID:   origin.ChatID,
 		Content:  fmt.Sprintf("[Cron Job %s]\n\n%s", jobID, content),
 	}
+	if origin.UserID != "" {
+		msg.UserID = origin.UserID
+	}
 	if origin.ThreadID != "" {
 		msg.ThreadID = origin.ThreadID
 	}

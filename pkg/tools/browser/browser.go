@@ -3,11 +3,16 @@
 package browser
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
+	"image"
+	"image/color"
+	"image/png"
 	"log/slog"
 	"os"
+	"strings"
 	"sync"
 	"time"
 
@@ -268,7 +273,7 @@ func (m *Manager) Snapshot(ctx context.Context) (string, error) {
 	return fmt.Sprintf("Tab: %s | URL: %s\nTitle: %s\n\nContent:\n%s", m.activeTab, result.URL, result.Title, result.TextContent), nil
 }
 
-// Screenshot takes a screenshot and returns the file path.
+// Screenshot takes a plain screenshot and returns the file path.
 func (m *Manager) Screenshot(ctx context.Context) (string, error) {
 	tabCtx, cancel := m.getTabCtx()
 	if tabCtx == nil {
@@ -289,6 +294,204 @@ func (m *Manager) Screenshot(ctx context.Context) (string, error) {
 		return "", fmt.Errorf("save screenshot: %w", err)
 	}
 	return tmp, nil
+}
+
+// InteractiveElement represents a clickable/interactive element on the page.
+type InteractiveElement struct {
+	Ref    string `json:"ref"`    // @e1, @e2, ...
+	XPath  string `json:"xpath"`  // XPath selector
+	Tag    string `json:"tag"`    // HTML tag
+	Text   string `json:"text"`   // text content
+	Rect   string `json:"rect"`   // "x,y,w,h"
+	Input  string `json:"input"`  // input type if any
+}
+
+// CollectInteractiveElements returns all clickable/interactive elements with refs.
+func (m *Manager) CollectInteractiveElements(ctx context.Context) ([]InteractiveElement, error) {
+	tabCtx, cancel := m.getTabCtx()
+	if tabCtx == nil {
+		return nil, fmt.Errorf("no active tab")
+	}
+	defer cancel()
+
+	var jsonStr string
+	jsCode := `(function(){
+		var els = [], counter = 0;
+		var selectors = 'a,button,input,select,textarea,[onclick],[role="button"],[contenteditable="true"],[tabindex]';
+		var nodes = document.querySelectorAll(selectors);
+		function esc(s){return s.replace(/"/g,'\\"').replace(/'/g,"\\'");}
+		function rectStr(el){
+			var r = el.getBoundingClientRect();
+			return Math.round(r.left)+','+Math.round(r.top)+','+Math.round(r.width)+','+Math.round(r.height);
+		}
+		function xpath(el){
+			if(!el || el===document.body) return '';
+			var ix = 0, sib = el.previousSibling;
+			while(sib){ if(sib.nodeType===1&&sib.tagName===el.tagName) ix++; sib=sib.previousSibling; }
+			return xpath(el.parentNode)+'/'+el.tagName.toLowerCase()+'['+(ix+1)+']';
+		}
+		nodes.forEach(function(el){
+			if(el.offsetWidth===0||el.offsetHeight===0) return;
+			var text = (el.textContent||'').trim().substring(0,60);
+			if(!text&&el.placeholder) text='[input:'+el.placeholder+']';
+			if(!text&&(el.tagName==='INPUT'||el.tagName==='TEXTAREA')){
+				text='[input type='+(el.type||'text')+']';
+			}
+			els.push({
+				ref: '@e'+(++counter),
+				xpath: xpath(el),
+				tag: el.tagName.toLowerCase(),
+				text: text,
+				rect: rectStr(el)
+			});
+		});
+		return JSON.stringify(els);
+	})()`
+	if err := chromedp.Run(tabCtx,
+		chromedp.Sleep(300*time.Millisecond),
+		chromedp.Evaluate(jsCode, &jsonStr),
+	); err != nil {
+		return nil, fmt.Errorf("collect elements: %w", err)
+	}
+	var els []InteractiveElement
+	if err := json.Unmarshal([]byte(jsonStr), &els); err != nil {
+		return nil, fmt.Errorf("parse elements: %w", err)
+	}
+	return els, nil
+}
+
+// AnnotateScreenshot takes a screenshot and draws numbered [N] labels on interactive elements.
+// Returns the annotated image file path.
+func (m *Manager) AnnotateScreenshot(ctx context.Context) (string, []InteractiveElement, error) {
+	tabCtx, cancel := m.getTabCtx()
+	if tabCtx == nil {
+		return "", nil, fmt.Errorf("no active tab")
+	}
+	defer cancel()
+
+	els, err := m.CollectInteractiveElements(ctx)
+	if err != nil {
+		return "", nil, err
+	}
+
+	var buf []byte
+	if err := chromedp.Run(tabCtx,
+		chromedp.Sleep(300*time.Millisecond),
+		chromedp.CaptureScreenshot(&buf),
+	); err != nil {
+		return "", nil, fmt.Errorf("screenshot: %w", err)
+	}
+
+	// Decode image and draw labels
+	img, fmtName, err := image.Decode(bytes.NewReader(buf))
+	if err != nil {
+		return "", els, fmt.Errorf("decode image: %w", err)
+	}
+
+	labelSize := img.Bounds().Dx() / 40 // label font size relative to image width
+	if labelSize < 12 {
+		labelSize = 12
+	}
+	if labelSize > 48 {
+		labelSize = 48
+	}
+
+	rgba := image.NewRGBA(img.Bounds())
+	switch v := img.(type) {
+	case *image.YCbCr:
+		drawImage(rgba, v.Bounds(), v)
+	default:
+		drawImage(rgba, v.Bounds(), v)
+	}
+
+	blue := color.RGBA{30, 136, 229, 220}
+	bgColor := color.RGBA{255, 255, 255, 230}
+	red := color.RGBA{220, 50, 50, 255}
+
+	for i, el := range els {
+		parts := strings.Split(el.Rect, ",")
+		if len(parts) != 4 {
+			continue
+		}
+		var x, y, w, h int
+		fmt.Sscanf(strings.Join(parts, ","), "%d,%d,%d,%d", &x, &y, &w, &h)
+		if w < 3 || h < 3 {
+			continue
+		}
+		cx := x + w/2
+		cy := y + h/2
+		label := fmt.Sprintf("[%d]", i+1)
+
+		// Draw background pill
+		pt := image.Point{X: cx - 6, Y: cy - labelSize - 2}
+		rectBg := image.Rect(pt.X-4, pt.Y-4, pt.X+len(label)*labelSize/2+4, pt.Y+labelSize+4)
+		drawFill(rgba, rectBg, bgColor)
+		drawRect(rgba, rectBg, blue, 2)
+
+		// Draw label text (basic — colored dot + number)
+		dotPt := image.Point{X: cx - 3, Y: cy - 3}
+		drawFill(rgba, image.Rect(dotPt.X, dotPt.Y, dotPt.X+6, dotPt.Y+6), red)
+	}
+
+	tmp := fmt.Sprintf("/tmp/hermes-browser-annotated-%d.png", time.Now().UnixNano())
+	outf, err := os.Create(tmp)
+	if err != nil {
+		return "", els, fmt.Errorf("create file: %w", err)
+	}
+	defer outf.Close()
+	switch fmtName {
+	case "png":
+		err = png.Encode(outf, rgba)
+	default:
+		err = png.Encode(outf, rgba)
+	}
+	if err != nil {
+		return "", els, fmt.Errorf("encode: %w", err)
+	}
+	return tmp, els, nil
+}
+
+// drawImage copies src image into dst RGBA using straightforward pixel copy.
+func drawImage(dst *image.RGBA, dstRect image.Rectangle, src image.Image) {
+	b := src.Bounds()
+	for y := 0; y < b.Dy() && y+b.Min.Y < dst.Bounds().Dy(); y++ {
+		for x := 0; x < b.Dx() && x+b.Min.X < dst.Bounds().Dx(); x++ {
+			dst.Set(x+b.Min.X, y+b.Min.Y, src.At(x+b.Min.X, y+b.Min.Y))
+		}
+	}
+}
+
+// Minimal draw helpers (avoids external imaging library)
+func drawFill(img *image.RGBA, rect image.Rectangle, c color.Color) {
+	for y := rect.Min.Y; y < rect.Max.Y; y++ {
+		for x := rect.Min.X; x < rect.Max.X; x++ {
+			if x >= img.Bounds().Dx() || y >= img.Bounds().Dy() {
+				continue
+			}
+			img.Set(x, y, c)
+		}
+	}
+}
+
+func drawRect(img *image.RGBA, rect image.Rectangle, c color.Color, thickness int) {
+	for t := 0; t < thickness; t++ {
+		for x := rect.Min.X + t; x < rect.Max.X-t; x++ {
+			if rect.Min.Y+t < img.Bounds().Dy() && rect.Min.Y+t >= 0 {
+				img.Set(x, rect.Min.Y+t, c)
+			}
+			if rect.Max.Y-1-t < img.Bounds().Dy() && rect.Max.Y-1-t >= 0 {
+				img.Set(x, rect.Max.Y-1-t, c)
+			}
+		}
+		for y := rect.Min.Y + t; y < rect.Max.Y-t; y++ {
+			if rect.Min.X+t < img.Bounds().Dx() && rect.Min.X+t >= 0 {
+				img.Set(rect.Min.X+t, y, c)
+			}
+			if rect.Max.X-1-t < img.Bounds().Dx() && rect.Max.X-1-t >= 0 {
+				img.Set(rect.Max.X-1-t, y, c)
+			}
+		}
+	}
 }
 
 // GetImages returns all images on the current page (src, alt, width, height).

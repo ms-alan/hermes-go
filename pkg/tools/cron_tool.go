@@ -112,6 +112,13 @@ func handleCronCreate(args map[string]any) string {
 		Skills:    parseSkillsArg(args),
 	}
 
+	// Attach delivery origin from the current session context (set by platform handlers).
+	// Tools that run async (e.g. cron job creation) can retrieve it via
+	// tools.GetCurrentDeliveryOrigin() even without a ctx argument.
+	if origin := GetCurrentDeliveryOrigin(); origin != nil {
+		job.Origin = origin
+	}
+
 	// Compute first next run
 	job.NextRunAt = cron.ComputeNextRun(schedule, "")
 

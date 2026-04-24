@@ -3,6 +3,8 @@ module github.com/nousresearch/hermes-go
 go 1.24.3
 
 require (
+	github.com/chromedp/chromedp v0.10.0
+	github.com/creack/pty v1.1.24
 	github.com/google/uuid v1.6.0
 	gopkg.in/yaml.v3 v3.0.1
 	modernc.org/sqlite v1.36.0
@@ -11,9 +13,7 @@ require (
 
 require (
 	github.com/chromedp/cdproto v0.0.0-20240801214329-3f85d328b335 // indirect
-	github.com/chromedp/chromedp v0.10.0 // indirect
 	github.com/chromedp/sysutil v1.0.0 // indirect
-	github.com/creack/pty v1.1.24 // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect
 	github.com/gobwas/httphead v0.1.0 // indirect
 	github.com/gobwas/pool v0.2.1 // indirect
