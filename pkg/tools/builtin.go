@@ -667,521 +667,159 @@ func checkFileTools() bool {
 // ---------------------------------------------------------------------------
 
 func init() {
-	Register(
-		"file_read",
-		"builtin",
-		fileReadSchema,
-		fileReadHandler,
-		checkFileTools,
-		nil,
-		false,
-		"Read a file with optional line offset and limit",
-		"📄",
-	)
+	// -------------------------------------------------------------------------
+	// file tools
+	Register("file_read", "file", fileReadSchema, fileReadHandler, checkFileTools, nil, false,
+		"Read a file with optional line offset and limit", "📄")
 
-	Register(
-		"file_write",
-		"builtin",
-		fileWriteSchema,
-		fileWriteHandler,
-		checkFileTools,
-		nil,
-		false,
-		"Write content to a file, creating or overwriting as needed",
-		"✏️",
-	)
+	Register("file_write", "file", fileWriteSchema, fileWriteHandler, checkFileTools, nil, false,
+		"Write content to a file, creating or overwriting as needed", "✏️")
 
-	Register(
-		"file_delete",
-		"builtin",
-		fileDeleteSchema,
-		fileDeleteHandler,
-		checkFileTools,
-		nil,
-		false,
-		"Delete a file or empty directory (use recursive:true for directories)",
-		"🗑️",
-	)
+	Register("file_delete", "file", fileDeleteSchema, fileDeleteHandler, checkFileTools, nil, false,
+		"Delete a file or empty directory (use recursive:true for directories)", "🗑️")
 
-	Register(
-		"terminal",
-		"builtin",
-		terminalSchema,
-		runTerminalCommand,
-		checkTerminalEnv,
-		nil,
-		false,
-		"Execute shell commands locally or via docker/SSH",
-		"💻",
-	)
+	Register("patch", "file", patchSchema, patchHandler, nil, nil, false,
+		"Apply targeted find-and-replace edits to files — simple replace or V4A multi-file patch", "🩹")
 
-	Register(
-		"process",
-		"builtin",
-		processSchema,
-		processToolHandler,
-		nil,
-		nil,
-		false,
-		"Manage background processes — list, get, register, unregister",
-		"⚙️",
-	)
+	Register("search_files", "file", searchFilesSchema, searchFilesHandler, nil, nil, false,
+		"Search file contents with ripgrep (rg) or find files by name — respects .gitignore", "🔎")
 
-	Register(
-		"web_search",
-		"builtin",
-		WebSearchSchema,
-		WebSearchHandler,
-		CheckWebSearch,
-		nil,
-		false,
-		"Search the web using Tavily API (requires TAVILY_API_KEY)",
-		"🔍",
-	)
+	// -------------------------------------------------------------------------
+	// terminal tools
+	Register("terminal", "terminal", terminalSchema, runTerminalCommand, checkTerminalEnv, nil, false,
+		"Execute shell commands locally or via docker/SSH", "💻")
 
-	Register(
-		"web_extract",
-		"builtin",
-		webExtractSchema,
-		webExtractHandler,
-		nil,
-		nil,
-		false,
-		"Extract clean text from web pages — strips HTML, returns readable content",
-		"📄",
-	)
+	Register("process", "terminal", processSchema, processToolHandler, nil, nil, false,
+		"Manage background processes — list, get, register, unregister", "⚙️")
 
-	Register(
-		"memory",
-		"builtin",
-		memorySchema,
-		memoryHandler,
-		nil,
-		nil,
-		false,
-		"Manage agent memory — add/replace/remove/show entries in MEMORY.md or USER.md",
-		"🧠",
-	)
+	// -------------------------------------------------------------------------
+	// web tools
+	Register("web_search", "web", WebSearchSchema, WebSearchHandler, CheckWebSearch, nil, false,
+		"Search the web using Tavily API (requires TAVILY_API_KEY)", "🔍")
 
-	Register(
-		"cronjob",
-		"builtin",
-		cronSchema,
-		cronToolHandler,
-		nil,
-		nil,
-		false,
-		"Manage scheduled cron jobs — create, list, remove, pause, resume, run",
-		"⏰",
-	)
+	Register("web_extract", "web", webExtractSchema, webExtractHandler, nil, nil, false,
+		"Extract clean text from web pages — strips HTML, returns readable content", "📄")
 
-	Register(
-		"browser_navigate",
-		"builtin",
-		browserNavigateSchema,
-		browserNavigateHandler,
-		nil,
-		nil,
-		false,
-		"Open a URL in a headless Chrome browser and get a text summary",
-		"🌐",
-	)
+	// -------------------------------------------------------------------------
+	// memory / session tools
+	Register("memory", "memory", memorySchema, memoryHandler, nil, nil, false,
+		"Manage agent memory — add/replace/remove/show entries in MEMORY.md or USER.md", "🧠")
 
-	Register(
-		"browser_snapshot",
-		"builtin",
-		browserSnapshotSchema,
-		browserSnapshotHandler,
-		nil,
-		nil,
-		false,
-		"Get a text snapshot of the current browser page",
-		"📄",
-	)
+	Register("session_search", "memory", sessionSearchSchema, sessionSearchHandler, nil, nil, false,
+		"Search past conversation sessions with full-text search — omit query to list recent sessions", "🔍")
 
-	Register(
-		"browser_screenshot",
-		"builtin",
-		browserScreenshotSchema,
-		browserVisionHandler,
-		nil,
-		nil,
-		false,
-		"Take a screenshot of the current browser page and save to file",
-		"📸",
-	)
+	// -------------------------------------------------------------------------
+	// skills tools
+	Register("skills_list", "skills", skillsListSchema, skillsListHandler, nil, nil, false,
+		"List all skills (tier 1 — name + brief description only)", "📋")
 
-	Register(
-		"browser_click",
-		"builtin",
-		browserClickSchema,
-		browserClickHandler,
-		nil,
-		nil,
-		false,
-		"Click an element on the current page by selector or ref",
-		"👆",
-	)
+	Register("skill_view", "skills", skillViewSchema, skillViewHandler, nil, nil, false,
+		"View full skill metadata (tier 2) or linked file content (tier 3)", "🔍")
 
-	Register(
-		"browser_type",
-		"builtin",
-		browserTypeSchema,
-		browserTypeHandler,
-		nil,
-		nil,
-		false,
-		"Type text into an input field identified by selector or ref",
-		"⌨️",
-	)
+	// -------------------------------------------------------------------------
+	// browser tools
+	Register("browser_navigate", "browser", browserNavigateSchema, browserNavigateHandler, nil, nil, false,
+		"Open a URL in a headless Chrome browser and get a text summary", "🌐")
 
-	Register(
-		"browser_back",
-		"builtin",
-		browserBackSchema,
-		browserBackHandler,
-		nil,
-		nil,
-		false,
-		"Navigate back to the previous page",
-		"⬅️",
-	)
+	Register("browser_snapshot", "browser", browserSnapshotSchema, browserSnapshotHandler, nil, nil, false,
+		"Get a text snapshot of the current browser page", "📄")
 
-	Register(
-		"browser_scroll",
-		"builtin",
-		browserScrollSchema,
-		browserScrollHandler,
-		nil,
-		nil,
-		false,
-		"Scroll the current page up or down",
-		"📜",
-	)
+	Register("browser_screenshot", "browser", browserScreenshotSchema, browserVisionHandler, nil, nil, false,
+		"Take a screenshot of the current browser page and save to file", "📸")
 
-	Register(
-		"browser_press",
-		"builtin",
-		browserPressSchema,
-		browserPressHandler,
-		nil,
-		nil,
-		false,
-		"Press a keyboard key (Enter, Tab, Escape, ArrowUp, etc.)",
-		"⌨️",
-	)
+	Register("browser_click", "browser", browserClickSchema, browserClickHandler, nil, nil, false,
+		"Click an element on the current page by selector or ref", "👆")
 
-	Register(
-		"browser_new_tab",
-		"builtin",
-		browserNewTabSchema,
-		browserNewTabHandler,
-		nil,
-		nil,
-		false,
-		"Create a new browser tab, optionally with a URL",
-		"🆕",
-	)
+	Register("browser_type", "browser", browserTypeSchema, browserTypeHandler, nil, nil, false,
+		"Type text into an input field identified by selector or ref", "⌨️")
 
-	Register(
-		"browser_switch_tab",
-		"builtin",
-		browserSwitchTabSchema,
-		browserSwitchTabHandler,
-		nil,
-		nil,
-		false,
-		"Switch to a specific tab by ID",
-		"🔄",
-	)
+	Register("browser_back", "browser", browserBackSchema, browserBackHandler, nil, nil, false,
+		"Navigate back to the previous page", "⬅️")
 
-	Register(
-		"browser_close_tab",
-		"builtin",
-		browserCloseTabSchema,
-		browserCloseTabHandler,
-		nil,
-		nil,
-		false,
-		"Close a specific browser tab by ID",
-		"❌",
-	)
+	Register("browser_scroll", "browser", browserScrollSchema, browserScrollHandler, nil, nil, false,
+		"Scroll the current page up or down", "📜")
 
-	Register(
-		"browser_list_tabs",
-		"builtin",
-		browserListTabsSchema,
-		browserListTabsHandler,
-		nil,
-		nil,
-		false,
-		"List all open browser tabs with IDs and titles",
-		"📑",
-	)
+	Register("browser_press", "browser", browserPressSchema, browserPressHandler, nil, nil, false,
+		"Press a keyboard key (Enter, Tab, Escape, ArrowUp, etc.)", "⌨️")
 
-	Register(
-		"browser_get_images",
-		"builtin",
-		browserGetImagesSchema,
-		browserGetImagesHandler,
-		nil,
-		nil,
-		false,
-		"Get all images on the current page with URLs and alt text",
-		"🖼️",
-	)
+	Register("browser_new_tab", "browser", browserNewTabSchema, browserNewTabHandler, nil, nil, false,
+		"Create a new browser tab, optionally with a URL", "🆕")
 
-	Register(
-		"browser_console",
-		"builtin",
-		browserConsoleSchema,
-		browserConsoleHandler,
-		nil,
-		nil,
-		false,
-		"Evaluate JavaScript in the page context or get page snapshot",
-		"💻",
-	)
+	Register("browser_switch_tab", "browser", browserSwitchTabSchema, browserSwitchTabHandler, nil, nil, false,
+		"Switch to a specific tab by ID", "🔄")
 
-	Register(
-		"execute_code",
-		"builtin",
-		CodeExecutionSchema,
-		executeCodeHandler,
-		nil,
-		nil,
-		false,
-		"Execute a Python script in a sandboxed environment with Hermes tool access",
-		"⚡",
-	)
+	Register("browser_close_tab", "browser", browserCloseTabSchema, browserCloseTabHandler, nil, nil, false,
+		"Close a specific browser tab by ID", "❌")
 
-	Register(
-		"vision_analyze",
-		"builtin",
-		visionSchema,
-		visionAnalyzeHandler,
-		nil,
-		nil,
-		false,
-		"Use vision to analyze an image or screenshot",
-		"👁️",
-	)
+	Register("browser_list_tabs", "browser", browserListTabsSchema, browserListTabsHandler, nil, nil, false,
+		"List all open browser tabs with IDs and titles", "📑")
 
-	Register(
-		"image_generate",
-		"builtin",
-		imageGenerateSchema,
-		imageGenerateHandler,
-		nil,
-		nil,
-		false,
-		"Generate images from text prompts via MiniMax image API",
-		"🎨",
-	)
+	Register("browser_get_images", "browser", browserGetImagesSchema, browserGetImagesHandler, nil, nil, false,
+		"Get all images on the current page with URLs and alt text", "🖼️")
 
-	Register(
-		"text_to_speech",
-		"builtin",
-		textToSpeechSchema,
-		textToSpeechHandler,
-		nil,
-		nil,
-		false,
-		"Convert text to speech audio via MiniMax TTS API",
-		"🔊",
-	)
+	Register("browser_console", "browser", browserConsoleSchema, browserConsoleHandler, nil, nil, false,
+		"Evaluate JavaScript in the page context or get page snapshot", "💻")
 
-	Register(
-		"skills_list",
-		"builtin",
-		skillsListSchema,
-		skillsListHandler,
-		nil,
-		nil,
-		false,
-		"List all skills (tier 1 — name + brief description only)",
-		"📋",
-	)
+	// -------------------------------------------------------------------------
+	// code execution
+	Register("execute_code", "code_execution", CodeExecutionSchema, executeCodeHandler, nil, nil, false,
+		"Execute a Python script in a sandboxed environment with Hermes tool access", "⚡")
 
-	Register(
-		"skill_view",
-		"builtin",
-		skillViewSchema,
-		skillViewHandler,
-		nil,
-		nil,
-		false,
-		"View full skill metadata (tier 2) or linked file content (tier 3)",
-		"🔍",
-	)
+	// -------------------------------------------------------------------------
+	// vision + image generation
+	Register("vision_analyze", "vision", visionSchema, visionAnalyzeHandler, nil, nil, false,
+		"Use vision to analyze an image or screenshot", "👁️")
 
-	Register(
-		"delegate_task",
-		"builtin",
-		delegateTaskSchema,
-		delegateTaskHandler,
-		nil,
-		nil,
-		false,
-		"Spawn autonomous sub-agents to handle tasks in parallel",
-		"🤖",
-	)
+	Register("image_generate", "image_gen", imageGenerateSchema, imageGenerateHandler, nil, nil, false,
+		"Generate images from text prompts via MiniMax image API", "🎨")
 
-	Register(
-		"patch",
-		"builtin",
-		patchSchema,
-		patchHandler,
-		nil,
-		nil,
-		false,
-		"Apply targeted find-and-replace edits to files — simple replace or V4A multi-file patch",
-		"🩹",
-	)
+	// -------------------------------------------------------------------------
+	// audio tools
+	Register("text_to_speech", "tts", textToSpeechSchema, textToSpeechHandler, nil, nil, false,
+		"Convert text to speech audio via MiniMax TTS API", "🔊")
 
-	Register(
-		"clarify",
-		"builtin",
-		clarifySchema,
-		clarifyHandler,
-		nil,
-		nil,
-		false,
-		"Ask the user a clarifying question — multiple choice or free-form",
-		"❓",
-	)
+	Register("transcription", "transcription", transcriptionSchema, transcriptionHandler, nil, nil, false,
+		"Transcribe audio to text — stub (requires faster-whisper or API keys for OpenAI/Groq/Gemini)", "🎤")
 
-	Register(
-		"search_files",
-		"builtin",
-		searchFilesSchema,
-		searchFilesHandler,
-		nil,
-		nil,
-		false,
-		"Search file contents with ripgrep (rg) or find files by name — respects .gitignore",
-		"🔎",
-	)
+	// -------------------------------------------------------------------------
+	// agent / delegation tools
+	Register("delegate_task", "delegation", delegateTaskSchema, delegateTaskHandler, nil, nil, false,
+		"Spawn autonomous sub-agents to handle tasks in parallel", "🤖")
 
-	Register(
-		"send_message",
-		"builtin",
-		sendMessageSchema,
-		sendMessageHandler,
-		nil,
-		nil,
-		false,
-		"Send a message to any connected platform (QQ/Telegram/Discord) or list available targets",
-		"✉️",
-	)
+	Register("mixture_of_agents", "moa", mixtureOfAgentsSchema, mixtureOfAgentsHandler, nil, nil, false,
+		"Solve complex tasks using multiple LLMs — parallel reference models + aggregator synthesis (MoE)", "🧠")
 
-	Register(
-		"todo",
-		"builtin",
-		todoSchema,
-		todoHandler,
-		nil,
-		nil,
-		false,
-		"Manage a persistent task list — read with no args, write with todos array (merge=true to update by id)",
-		"📋",
-	)
+	Register("rl_training", "rl", rlTrainingSchema, rlTrainingHandler, nil, nil, false,
+		"Manage RL training runs via Tinker-Atropos (GRPO) — requires tinker-atropos submodule", "🎓")
 
-	Register(
-		"session_search",
-		"builtin",
-		sessionSearchSchema,
-		sessionSearchHandler,
-		nil,
-		nil,
-		false,
-		"Search past conversation sessions with full-text search — omit query to list recent sessions",
-		"🔍",
-	)
+	// -------------------------------------------------------------------------
+	// scheduling
+	Register("cronjob", "cronjob", cronSchema, cronToolHandler, nil, nil, false,
+		"Manage scheduled cron jobs — create, list, remove, pause, resume, run", "⏰")
 
-	Register(
-		"rl_training",
-		"builtin",
-		rlTrainingSchema,
-		rlTrainingHandler,
-		nil,
-		nil,
-		false,
-		"Manage RL training runs via Tinker-Atropos (GRPO) — requires tinker-atropos submodule",
-		"🎓",
-	)
+	// -------------------------------------------------------------------------
+	// planning / Clarify
+	Register("todo", "todo", todoSchema, todoHandler, nil, nil, false,
+		"Manage a persistent task list — read with no args, write with todos array (merge=true to update by id)", "📋")
 
-	Register(
-		"mixture_of_agents",
-		"builtin",
-		mixtureOfAgentsSchema,
-		mixtureOfAgentsHandler,
-		nil,
-		nil,
-		false,
-		"Solve complex tasks using multiple LLMs — parallel reference models + aggregator synthesis (MoE)",
-		"🧠",
-	)
+	Register("clarify", "clarify", clarifySchema, clarifyHandler, nil, nil, false,
+		"Ask the user a clarifying question — multiple choice or free-form", "❓")
 
-	Register(
-		"openrouter_status",
-		"builtin",
-		openrouterClientSchema,
-		openrouterClientHandler,
-		nil,
-		nil,
-		false,
-		"Check OpenRouter API key status and available models",
-		"🔑",
-	)
+	// -------------------------------------------------------------------------
+	// messaging
+	Register("send_message", "messaging", sendMessageSchema, sendMessageHandler, nil, nil, false,
+		"Send a message to any connected platform (QQ/Telegram/Discord) or list available targets", "✉️")
 
-	Register(
-		"xai_status",
-		"builtin",
-		xaiHttpSchema,
-		xaiHttpHandler,
-		nil,
-		nil,
-		false,
-		"Check xAI (Grok) API availability and configuration",
-		"🤖",
-	)
+	// -------------------------------------------------------------------------
+	// inference / status tools
+	Register("openrouter_status", "inference", openrouterClientSchema, openrouterClientHandler, nil, nil, false,
+		"Check OpenRouter API key status and available models", "🔑")
 
-	Register(
-		"transcription",
-		"builtin",
-		transcriptionSchema,
-		transcriptionHandler,
-		nil,
-		nil,
-		false,
-		"Transcribe audio to text — stub (requires faster-whisper or API keys for OpenAI/Groq/Gemini)",
-		"🎤",
-	)
+	Register("xai_status", "inference", xaiHttpSchema, xaiHttpHandler, nil, nil, false,
+		"Check xAI (Grok) API availability and configuration", "🤖")
 
-	Register(
-		"env_passthrough",
-		"builtin",
-		envPassthroughSchema,
-		envPassthroughHandler,
-		nil,
-		nil,
-		false,
-		"Read environment variables for the agent process",
-		"🌿",
-	)
-
-	Register(
-		"delegate_task",
-		"builtin",
-		delegateTaskSchema,
-		delegateTaskHandler,
-		nil,
-		nil,
-		false,
-		"Spawn sub-agents for parallel task execution — stub (not yet implemented)",
-		"🎭",
-	)
+	Register("env_passthrough", "inference", envPassthroughSchema, envPassthroughHandler, nil, nil, false,
+		"Read environment variables for the agent process", "🌿")
 }
 
 // ---------------------------------------------------------------------------
