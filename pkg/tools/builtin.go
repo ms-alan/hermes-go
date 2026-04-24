@@ -1170,6 +1170,18 @@ func init() {
 		"Read environment variables for the agent process",
 		"🌿",
 	)
+
+	Register(
+		"delegate_task",
+		"builtin",
+		delegateTaskSchema,
+		delegateTaskHandler,
+		nil,
+		nil,
+		false,
+		"Spawn sub-agents for parallel task execution — stub (not yet implemented)",
+		"🎭",
+	)
 }
 
 // ---------------------------------------------------------------------------

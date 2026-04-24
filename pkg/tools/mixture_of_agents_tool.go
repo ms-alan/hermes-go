@@ -3,11 +3,20 @@ package tools
 import (
 	"context"
 	"fmt"
+	"os"
 	"strings"
 	"sync"
 
 	"github.com/nousresearch/hermes-go/pkg/model"
 )
+
+// getEnvOr returns the value of env var key, or fallback.
+func getEnvOr(key, fallback string) string {
+	if v := strings.TrimSpace(os.Getenv(key)); v != "" {
+		return v
+	}
+	return fallback
+}
 
 var mixtureOfAgentsSchema = map[string]any{
 	"name":        "mixture_of_agents",
