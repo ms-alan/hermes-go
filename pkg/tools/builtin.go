@@ -1110,6 +1110,18 @@ func init() {
 		"Manage RL training runs via Tinker-Atropos (GRPO) — requires tinker-atropos submodule",
 		"🎓",
 	)
+
+	Register(
+		"mixture_of_agents",
+		"builtin",
+		mixtureOfAgentsSchema,
+		mixtureOfAgentsHandler,
+		nil,
+		nil,
+		false,
+		"Solve complex tasks using multiple LLMs — parallel reference models + aggregator synthesis (MoE)",
+		"🧠",
+	)
 }
 
 // ---------------------------------------------------------------------------
