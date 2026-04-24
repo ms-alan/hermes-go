@@ -1086,6 +1086,18 @@ func init() {
 		"Manage a persistent task list — read with no args, write with todos array (merge=true to update by id)",
 		"📋",
 	)
+
+	Register(
+		"session_search",
+		"builtin",
+		sessionSearchSchema,
+		sessionSearchHandler,
+		nil,
+		nil,
+		false,
+		"Search past conversation sessions with full-text search — omit query to list recent sessions",
+		"🔍",
+	)
 }
 
 // ---------------------------------------------------------------------------
