@@ -1,7 +1,7 @@
 # hermes-go Feature Parity with hermes-agent (Python)
 
 > Last updated: 2026-04-24
-> Branch: `main` (commit 21a381a)
+> Branch: `main` (commit ab45107)
 > Python counterpart: `NousResearch/hermes-agent`
 
 This document tracks the feature gap between hermes-go (Go) and hermes-agent (Python).
@@ -17,13 +17,13 @@ Green = implemented, Yellow = partial, Red = not yet.
 | **Built-in Tools** | ✅ | `pkg/tools/builtin.go` — file_read, file_write, file_delete, terminal, web_search, delegate_task |
 | **Dangerous Command Authorization** | ✅ | `pkg/tools/approval.go` — wired into terminal/file_write/file_delete handlers |
 | **Session Management** | ✅ | `pkg/session/` — SQLite store, session create/switch/list/delete |
-| **Context Compression** | ✅ | `pkg/context/compressor.go` — iterative chunked summarization |
+| **Context Compression** | ✅ | `pkg/context/compressor.go` — full parity: `_prune_tool_results` (hash dedup), `redact_sensitive_text` (14+ regex patterns), `focus_topic`, `summarize_messages`, 13-section structured summary template |
 | **Graceful Shutdown (REPL)** | ✅ | `cmd/hermes/main.go` — signal.NotifyContext + stdin close |
 | **Structured Logging** | ✅ | All packages use `log/slog` (Go 1.21+) |
-| **MCP Client (Stdio+HTTP+SSE)** | ✅ | `pkg/mcp/` — client.go + sse_transport.go + types.go + server.go + config.go |
-| **MCP Tool Integration** | ✅ | `pkg/tools/mcp_tool.go` — init() calls initMCPServers() on load |
+| **MCP Client (Stdio+HTTP+SSE)** | ✅ | `pkg/mcp/` — client.go + sse_transport.go + types.go + config.go + HTTP2 transport + exponential backoff reconnection |
+| **MCP Tool Integration** | ✅ | `pkg/tools/mcp_tool.go` — init() calls initMCPServers() on load; HTTP2 multiplexing, SSE with exponential backoff reconnection (1s→30s, 2x factor, jitter), SamplingHandler for server-initiated LLM requests |
 | **Web Search (4 backends)** | ✅ | `pkg/tools/web_search.go` — Exa + Tavily + DuckDuckGo + Firecrawl |
-| **Delegate Tool (Subagents)** | ✅ | `pkg/tools/delegate_tool.go` + `pkg/agent/delegate.go` — single + batch mode, depth=1 flat |
+| **Delegate Tool (Subagents)** | ✅ | `pkg/tools/delegate_tool.go` + `pkg/agent/delegate.go` — single + batch mode, orchestrator role, spawn pause/interrupt, progress callback, maxSpawnDepth |
 | **Skillsets Hub** | ✅ | `pkg/skill/` — loader.go + registry.go + REPL /skills command |
 | **MiniMax Model Client** | ✅ | `pkg/model/minimax.go` — /v1 base URL, double JSON decode fix |
 | **Config (YAML)** | ✅ | `config.Load()` from `~/.hermes/config.yaml` |
@@ -46,9 +46,6 @@ Green = implemented, Yellow = partial, Red = not yet.
 | Feature | Status | Notes |
 |---------|--------|-------|
 | **Token Counting** | ⚠️ rough | `pkg/context/token.go` uses character ÷ 4 approximation, not tiktoken |
-| **context_compressor (full)** | ⚠️ partial | Python has `_prune_old_tool_results`, `redact_sensitive_text`, `focus_topic` + 12-section summary template |
-| **delegate_tool (full)** | ✅ | pkg/agent/delegate.go — SetSpawnPaused/IsSpawnPaused, RegisterSubagent/InterruptSubagent/ListActiveSubagents, ProgressCallback, blocked tools strip, orchestrator role with maxSpawnDepth, MCP tool preservation hint, interrupt via context cancel |
-| **mcp_tool (full)** | ⚠️ partial | Missing: HTTP2, reconnection with backoff, sampling support, server-initiated LLM requests |
 | **Double-JSON Decode** | ⚠️ in agent | `pkg/agent/agent.go` handles double-encoded tool args for MiniMax, not generic |
 
 ---
