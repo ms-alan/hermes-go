@@ -823,6 +823,12 @@ func init() {
 
 	Register("env_passthrough", "inference", envPassthroughSchema, envPassthroughHandler, nil, nil, false,
 		"Read environment variables for the agent process", "🌿")
+
+	Register("neutts_synth", "tts", neutttsSynthSchema, neutttsSynthHandler, nil, nil, false,
+		"Check Neuttts API configuration — audio generation uses tts tool", "🎙️")
+
+	Register("interrupt", "system", interruptSchema, interruptHandler, nil, nil, false,
+		"Signal/clear/check interrupt for cancelling long-running operations", "🛑")
 }
 
 // ---------------------------------------------------------------------------
